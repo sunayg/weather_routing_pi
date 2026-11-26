@@ -100,12 +100,26 @@ ResultsDialog::ResultsDialog(wxWindow* parent, WeatherRouting& weatherrouting)
   }
 
   // ---- Table ----------------------------------------------------------------
-  m_table = new RoutingTablePanel(m_tabs, m_WeatherRouting, nullptr);
-  // Its Close button hides its parent, which here would be the tabs.
-  for (wxWindow* child : m_table->GetChildren())
-    if (auto* b = dynamic_cast<wxButton*>(child))
-      if (b->GetLabel() == _("Close")) b->Hide();
-  m_tabs->AddPage(m_table, _("Table"));
+  {
+    wxPanel* p = new wxPanel(m_tabs);
+    wxBoxSizer* s = new wxBoxSizer(wxVERTICAL);
+    m_tableLeg = new wxChoice(p, wxID_ANY);
+    m_tableLeg->SetToolTip(_("Which leg of the passage to show."));
+    s->Add(m_tableLeg, 0, wxALL, pad);
+    m_table = new RoutingTablePanel(p, m_WeatherRouting, nullptr);
+    // Its Close button hides its parent, which here would be this tab.
+    for (wxWindow* child : m_table->GetChildren())
+      if (auto* b = dynamic_cast<wxButton*>(child))
+        if (b->GetLabel() == _("Close")) b->Hide();
+    s->Add(m_table, 1, wxEXPAND);
+    p->SetSizer(s);
+    m_tabs->AddPage(p, _("Table"));
+    m_tableLeg->Bind(wxEVT_CHOICE, [this](wxCommandEvent&) {
+      const int i = m_tableLeg->GetSelection();
+      if (i >= 0 && i < static_cast<int>(m_tableLegs.size()))
+        m_table->SetRouteMap(m_tableLegs[i]);
+    });
+  }
 
   // ---- Compare --------------------------------------------------------------
   {
@@ -237,7 +251,25 @@ void ResultsDialog::Load() {
                         : _("N/A"));
 
   LoadSummary(routes);
-  m_table->SetRouteMap(routes.front());
+  // Table: one leg at a time; keep the chosen leg across refreshes.
+  {
+    RouteMapOverlay* shown = m_table->GetRouteMap();
+    m_tableLegs = routes;
+    m_tableLeg->Clear();
+    int keep = 0;
+    for (size_t i = 0; i < routes.size(); ++i) {
+      const RouteMapConfiguration lc = routes[i]->GetConfiguration();
+      m_tableLeg->Append(wxString::Format(
+          _("Leg %zu: %s to %s"), i + 1,
+          wr::ShortPointName(lc.Start, lc.MultiLegParentRouteName),
+          wr::ShortPointName(lc.End, lc.MultiLegParentRouteName)));
+      if (routes[i] == shown) keep = static_cast<int>(i);
+    }
+    m_tableLeg->SetSelection(keep);
+    m_tableLeg->Show(routes.size() > 1);
+    m_table->SetRouteMap(routes[keep]);
+    m_tableLeg->GetParent()->Layout();
+  }
   LoadCompare(routes);
   LoadDetails(routes);
   Layout();

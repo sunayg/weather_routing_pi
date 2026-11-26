@@ -16,6 +16,7 @@ class RouteMapOverlay;
 class RoutingTablePanel;
 class WeatherRoute;
 class WeatherRouting;
+class wxChoice;
 class wxListCtrl;
 class wxListEvent;
 class wxNotebook;
@@ -57,6 +58,8 @@ class ResultsDialog : public wxDialog {
   wxListCtrl* m_legs = nullptr;
   wxTextCtrl* m_notes = nullptr;
   RoutingTablePanel* m_table = nullptr;
+  wxChoice* m_tableLeg = nullptr;   // passages only
+  std::vector<RouteMapOverlay*> m_tableLegs;
   wxListCtrl* m_compare = nullptr;
   wxStaticText* m_compareNote = nullptr;
   wxTextCtrl* m_details = nullptr;
