@@ -7,6 +7,7 @@
 #include <wx/spinctrl.h>
 
 #include <algorithm>
+#include <list>
 #include <cmath>
 
 #include "RouteMapOverlay.h"
@@ -152,9 +153,9 @@ RouteSettingsDialog::RouteSettingsDialog(wxWindow* parent,
     s->Add(FieldRow(m_scroll, "time_mode"), 0, wxALIGN_CENTER_VERTICAL);
     m_date = new wxDatePickerCtrl(m_scroll, wxID_ANY);
     m_hour = new wxSpinCtrl(m_scroll, wxID_ANY, wxEmptyString, wxDefaultPosition,
-                            wxSize(FromDIP(64), -1), wxSP_ARROW_KEYS, 0, 23, 0);
+                            wxSize(FromDIP(110), -1), wxSP_ARROW_KEYS, 0, 23, 0);
     m_minute = new wxSpinCtrl(m_scroll, wxID_ANY, wxEmptyString,
-                              wxDefaultPosition, wxSize(FromDIP(64), -1),
+                              wxDefaultPosition, wxSize(FromDIP(110), -1),
                               wxSP_ARROW_KEYS | wxSP_WRAP, 0, 59, 0);
     m_date->SetToolTip(_("Date, in this computer's local time."));
     s->Add(m_date, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 2 * pad);
@@ -266,12 +267,17 @@ RouteSettingsDialog::RouteSettingsDialog(wxWindow* parent,
   Bind(wxEVT_CLOSE_WINDOW, [this](wxCloseEvent&) { Hide(); });
 
   SetSizer(top);
-  // Fit the content, but never beyond 90% of the screen (1366 x 768 target).
-  m_scroll->FitInside();
-  const wxSize best = GetBestSize();
+  // Show the whole main page without scrolling when the screen allows it,
+  // never taller than 85% of the screen (1366 x 768 target).
   const wxSize screen = wxGetDisplaySize();
-  SetSize(std::min(std::max(best.x, FromDIP(560)), screen.x * 9 / 10),
-          std::min(best.y, screen.y * 9 / 10));
+  const wxSize content = body->GetMinSize();
+  m_scroll->SetMinSize(
+      wxSize(content.x + FromDIP(24), std::min(content.y, screen.y * 85 / 100 -
+                                                              FromDIP(140))));
+  m_scroll->FitInside();
+  Fit();
+  SetSize(std::min(std::max(GetSize().x, FromDIP(600)), screen.x * 9 / 10),
+          std::min(GetSize().y, screen.y * 9 / 10));
   SetMinSize(wxSize(FromDIP(480), FromDIP(360)));
   CentreOnParent();
 }
@@ -297,7 +303,7 @@ wxSizer* RouteSettingsDialog::FieldRow(wxWindow* parent, const std::string& id) 
       fc.label = new wxStaticText(parent, wxID_ANY, f->label);
       fc.number = new wxSpinCtrlDouble(parent, wxID_ANY, wxEmptyString,
                                        wxDefaultPosition,
-                                       wxSize(FromDIP(90), -1), wxSP_ARROW_KEYS,
+                                       wxSize(FromDIP(130), -1), wxSP_ARROW_KEYS,
                                        f->min, f->max, f->min, f->step);
       fc.number->SetDigits(f->digits);
       fc.number->SetToolTip(f->tooltip);
@@ -392,13 +398,44 @@ void RouteSettingsDialog::ToggleSection(Section& s, bool open) {
 
 // ---- Loading ----------------------------------------------------------------
 
+std::vector<RouteMapOverlay*> RouteSettingsDialog::TargetRoutes() const {
+  std::list<RouteMapOverlay*> selected = m_WeatherRouting.CurrentRouteMaps();
+  std::vector<RouteMapOverlay*> out(selected.begin(), selected.end());
+  if (out.empty()) return out;
+  const RouteMapConfiguration first = out.front()->GetConfiguration();
+  if (!first.IsMultiLegGenerated || first.MultiLegGroupId.IsEmpty()) return out;
+  for (RouteMapOverlay* r : out) {
+    const RouteMapConfiguration c = r->GetConfiguration();
+    if (!c.IsMultiLegGenerated || c.MultiLegGroupId != first.MultiLegGroupId)
+      return out;  // a mix of routes: edit exactly what is selected
+  }
+  std::vector<RouteMapOverlay*> legs =
+      m_WeatherRouting.GetMultiLegGroupRoutes(first.MultiLegGroupId);
+  return legs.empty() ? out : legs;
+}
+
 std::vector<RouteMapConfiguration> RouteSettingsDialog::SelectedConfigurations()
     const {
   std::vector<RouteMapConfiguration> out;
-  for (RouteMapOverlay* r : m_WeatherRouting.CurrentRouteMaps())
-    out.push_back(r->GetConfiguration());
+  for (RouteMapOverlay* r : TargetRoutes()) out.push_back(r->GetConfiguration());
   return out;
 }
+
+namespace {
+// "Race test: Dolphin - Green Mark: pass Green Mark (stbd) 114452" is the
+// unique position name of a passing point; show "pass Green Mark (stbd)".
+wxString ShortPointName(const wxString& name, const wxString& passage) {
+  wxString s = name;
+  if (!passage.IsEmpty() && s.StartsWith(passage + _T(": ")))
+    s = s.Mid(passage.length() + 2);
+  const int space = s.Find(' ', true);
+  if (space != wxNOT_FOUND) {
+    const wxString tail = s.Mid(space + 1);
+    if (tail.length() == 6 && tail.IsNumber()) s = s.Left(space);
+  }
+  return s;
+}
+}  // namespace
 
 void RouteSettingsDialog::FillEndpoints() {
   auto fill = [](wxChoice* c, std::vector<EndpointItem>& items, bool start) {
@@ -465,7 +502,8 @@ void RouteSettingsDialog::Load() {
   } else if (passage) {
     m_title->SetLabel(wxString::Format(_("Passage settings: %s"),
                                        routes.front().MultiLegParentRouteName));
-    m_selection->SetLabel(_("applies to every selected leg"));
+    m_selection->SetLabel(
+        wxString::Format(_("applies to all %zu legs"), routes.size()));
   } else {
     m_title->SetLabel(wxString::Format(_("Route settings: %s to %s"),
                                        routes.front().Start, routes.front().End));
@@ -488,8 +526,10 @@ void RouteSettingsDialog::Load() {
   if (passage) {
     wxString legs;
     for (const auto& r : routes)
-      legs += wxString::Format(_("%d  %s to %s\n"), r.MultiLegLegIndex, r.Start,
-                               r.End);
+      legs += wxString::Format(
+          _("%d  %s to %s\n"), r.MultiLegLegIndex,
+          ShortPointName(r.Start, r.MultiLegParentRouteName),
+          ShortPointName(r.End, r.MultiLegParentRouteName));
     m_legs->SetLabel(legs.Trim());
   }
 
@@ -603,7 +643,7 @@ void RouteSettingsDialog::Commit(
     const std::function<void(RouteMapConfiguration&)>& edit) {
   if (m_loading) return;
   bool refresh = false;
-  for (RouteMapOverlay* route : m_WeatherRouting.CurrentRouteMaps()) {
+  for (RouteMapOverlay* route : TargetRoutes()) {
     RouteMapConfiguration configuration = route->GetConfiguration();
     if (configuration.DepartureTimeOptimizationCandidate) continue;
     edit(configuration);
@@ -695,7 +735,7 @@ void RouteSettingsDialog::OnBoat() {
   if (path.IsEmpty()) return;
   Commit([path](RouteMapConfiguration& c) { c.boatFileName = path; });
   // Load the new boat into each route, as opening a file does.
-  for (RouteMapOverlay* r : m_WeatherRouting.CurrentRouteMaps()) r->LoadBoat();
+  for (RouteMapOverlay* r : TargetRoutes()) r->LoadBoat();
 }
 
 void RouteSettingsDialog::OnTime() {

@@ -56,6 +56,9 @@ class RouteSettingsDialog : public wxDialog {
     wxString name, guid;
   };
 
+  // The routes being edited: the selection, or every leg of a passage when
+  // the selection is one or more legs of the same passage.
+  std::vector<class RouteMapOverlay*> TargetRoutes() const;
   std::vector<RouteMapConfiguration> SelectedConfigurations() const;
   void Commit(const std::function<void(RouteMapConfiguration&)>& edit);
 
