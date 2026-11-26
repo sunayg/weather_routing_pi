@@ -228,6 +228,7 @@ private:
   friend class RoutingTablePanel;
   friend class RouteComparisonDialog;
   friend class RouteSettingsDialog;
+  friend class ResultsDialog;
 
   bool m_disable_colpane;
   wxCollapsiblePane* m_colpane;
@@ -462,6 +463,12 @@ public:
   /** Opens the single-page route settings dialog for the selected routes
    * (desktop). */
   void ShowRouteSettings();
+  /** Opens the results window for the selected route or passage. */
+  void ShowResults();
+  class ResultsDialog* m_ResultsDialog = nullptr;
+  /** The selection, or every leg of a passage when the selection is one or
+   * more legs of the same passage. */
+  std::vector<RouteMapOverlay*> SelectedRoutesOrPassage();
   /** Desktop main window: toolbar, filter box and shorter menus. */
   void SetUpDesktopMainWindow();
   void FitRouteColumnsToHeaders();

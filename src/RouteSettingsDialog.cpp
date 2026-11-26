@@ -403,19 +403,7 @@ void RouteSettingsDialog::ToggleSection(Section& s, bool open) {
 // ---- Loading ----------------------------------------------------------------
 
 std::vector<RouteMapOverlay*> RouteSettingsDialog::TargetRoutes() const {
-  std::list<RouteMapOverlay*> selected = m_WeatherRouting.CurrentRouteMaps();
-  std::vector<RouteMapOverlay*> out(selected.begin(), selected.end());
-  if (out.empty()) return out;
-  const RouteMapConfiguration first = out.front()->GetConfiguration();
-  if (!first.IsMultiLegGenerated || first.MultiLegGroupId.IsEmpty()) return out;
-  for (RouteMapOverlay* r : out) {
-    const RouteMapConfiguration c = r->GetConfiguration();
-    if (!c.IsMultiLegGenerated || c.MultiLegGroupId != first.MultiLegGroupId)
-      return out;  // a mix of routes: edit exactly what is selected
-  }
-  std::vector<RouteMapOverlay*> legs =
-      m_WeatherRouting.GetMultiLegGroupRoutes(first.MultiLegGroupId);
-  return legs.empty() ? out : legs;
+  return m_WeatherRouting.SelectedRoutesOrPassage();
 }
 
 std::vector<RouteMapConfiguration> RouteSettingsDialog::SelectedConfigurations()

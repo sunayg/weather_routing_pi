@@ -233,3 +233,37 @@ TEST(PassagePlan, StartAndFinishAreNeverMoved) {
   EXPECT_TRUE(legs[0].start_is_mark);
   EXPECT_TRUE(legs[1].end_is_mark);
 }
+
+// ---- Checking a computed route ----------------------------------------------
+TEST(PassCheck, ReportsClosestApproachAndSide) {
+  // Heading south 0.2 nm west of the mark: mark on the port (east) side.
+  std::vector<std::pair<double, double>> west = {{Lat(1), Lon(-0.2)},
+                                                 {Lat(-1), Lon(-0.2)}};
+  auto r = wr::CheckPass(Side(wr::MarkSide::LeaveToPort, 180), west);
+  ASSERT_TRUE(r.valid);
+  EXPECT_NEAR(r.closest_nm, 0.2, 1e-6);
+  EXPECT_EQ(r.side, wr::MarkSide::LeaveToPort);
+  EXPECT_TRUE(r.ok);
+  std::vector<std::pair<double, double>> east = {{Lat(1), Lon(0.2)},
+                                                 {Lat(-1), Lon(0.2)}};
+  r = wr::CheckPass(Side(wr::MarkSide::LeaveToPort, 180), east);
+  EXPECT_EQ(r.side, wr::MarkSide::LeaveToStarboard);
+  EXPECT_FALSE(r.ok);
+}
+TEST(PassCheck, ClearanceMustBeKept) {
+  std::vector<std::pair<double, double>> p = {{Lat(1), Lon(0.2)},
+                                              {Lat(-1), Lon(0.2)}};
+  EXPECT_FALSE(wr::CheckPass(KeepOut(0.3), p).ok);
+  EXPECT_TRUE(wr::CheckPass(KeepOut(0.1), p).ok);
+}
+TEST(PassCheck, UsesTheNearestOfSeveralSegments) {
+  std::vector<std::pair<double, double>> p = {
+      {Lat(2), Lon(-1)}, {Lat(0.5), Lon(-0.5)}, {Lat(-0.5), Lon(-0.5)},
+      {Lat(-2), Lon(1)}};
+  auto r = wr::CheckPass(KeepOut(0), p);
+  EXPECT_NEAR(r.closest_nm, 0.5, 1e-6);
+  EXPECT_EQ(r.side, wr::MarkSide::LeaveToPort);
+}
+TEST(PassCheck, TooShortPathIsInvalid) {
+  EXPECT_FALSE(wr::CheckPass(KeepOut(0.3), {{Lat(0), Lon(1)}}).valid);
+}

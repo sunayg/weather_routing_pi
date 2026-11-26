@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #pragma once
+#include <utility>
 #include <vector>
 
 // Geometry for per-mark routing rules: a keep-out radius around a mark and an
@@ -97,5 +98,17 @@ std::vector<PassageLeg> PlanPassageLegs(const std::vector<PassageMark>& marks,
                                   const std::vector<AvoidMark>& avoid,
                                   double barrier_length_nm = 20.0,
                                   double pass_offset_nm = 0.15);
+
+// ---- Checking a computed route -------------------------------------------
+// How a computed path (route points, in order) passed one mark.
+struct PassReport {
+  bool valid = false;       // the path has at least one segment
+  double closest_nm = 0;    // closest approach to the mark
+  MarkSide side = MarkSide::Any;  // LeaveToPort: the mark was on the boat's
+                                  // port side at the closest approach
+  bool ok = false;          // clearance and side both met
+};
+PassReport CheckPass(const MarkRule& rule,
+                     const std::vector<std::pair<double, double>>& path);
 
 }  // namespace weather_routing

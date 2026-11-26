@@ -34,6 +34,11 @@ wxString PassingPointName(const wxString& mark, bool port,
 wxString DescribeRoute(const RouteMapConfiguration& route,
                        const std::vector<NamedPoint>& points);
 
+// Name of the position or waypoint within about 90 m of (lat, lon), or the
+// coordinates when there is none.
+wxString NameForPoint(double lat, double lon,
+                      const std::vector<NamedPoint>& points);
+
 // True when every word of `filter` appears (case-insensitively) in `text`.
 bool MatchesFilter(const wxString& text, const wxString& filter);
 

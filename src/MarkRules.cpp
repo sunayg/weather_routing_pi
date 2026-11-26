@@ -185,4 +185,29 @@ std::vector<PassageLeg> PlanPassageLegs(const std::vector<PassageMark>& marks,
   return legs;
 }
 
+PassReport CheckPass(const MarkRule& rule,
+                     const std::vector<std::pair<double, double>>& path) {
+  PassReport r;
+  if (path.size() < 2) return r;
+  r.valid = true;
+  double best = 1e300, cross = 0;
+  for (size_t i = 0; i + 1 < path.size(); ++i) {
+    const Vec a = ToPlane(rule.lat, rule.lon, path[i].first, path[i].second);
+    const Vec b =
+        ToPlane(rule.lat, rule.lon, path[i + 1].first, path[i + 1].second);
+    const double d = ClosestApproach(a, b, nullptr);
+    if (d < best) {
+      best = d;
+      // Mark (the origin) left of the direction of travel => on port.
+      cross = Cross(Sub(b, a), Sub({0.0, 0.0}, a));
+    }
+  }
+  r.closest_nm = best;
+  r.side = cross > 0 ? MarkSide::LeaveToPort : MarkSide::LeaveToStarboard;
+  const bool clear = best + 1e-9 >= rule.clearance_nm;
+  const bool sideOk = rule.side == MarkSide::Any || rule.side == r.side;
+  r.ok = clear && sideOk;
+  return r;
+}
+
 }  // namespace weather_routing

@@ -18,18 +18,26 @@ double NearNm(double lat0, double lon0, double lat1, double lon1) {
   return std::hypot((lon1 - lon0) * kx, (lat1 - lat0) * 60.0);
 }
 
-wxString MarkName(const MarkRule& rule, const std::vector<NamedPoint>& points) {
+}  // namespace
+
+wxString NameForPoint(double lat, double lon,
+                      const std::vector<NamedPoint>& points) {
   const NamedPoint* best = nullptr;
   double bestNm = 0.05;  // about 90 m
   for (const NamedPoint& p : points) {
-    const double d = NearNm(rule.lat, rule.lon, p.lat, p.lon);
+    const double d = NearNm(lat, lon, p.lat, p.lon);
     if (d <= bestNm && !p.name.IsEmpty()) {
       best = &p;
       bestNm = d;
     }
   }
   if (best) return best->name;
-  return wxString::Format(_T("%.4f, %.4f"), rule.lat, rule.lon);
+  return wxString::Format(_T("%.4f, %.4f"), lat, lon);
+}
+
+namespace {
+wxString MarkName(const MarkRule& rule, const std::vector<NamedPoint>& points) {
+  return NameForPoint(rule.lat, rule.lon, points);
 }
 
 wxString FormatNm(double nm) {

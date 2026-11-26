@@ -65,6 +65,7 @@
 #include "ConfigurationXml.h"
 #include "RouteSettingsDialog.h"
 #include "RouteNaming.h"
+#include "ResultsDialog.h"
 #include "RouteWaypointExtractor.h"
 #include "RouteWaypointValidation.h"
 #include "RoutingEndpointPreflight.h"
@@ -2470,7 +2471,8 @@ void WeatherRouting::SetUpDesktopMainWindow() {
     bar->Add(more, 0, wxRIGHT | wxALIGN_CENTER_VERTICAL, 4);
     wxButton* stop = button(_("Stop"), _("Stop computing."));
     wxButton* results = button(_("Results"),
-                               _("Details and report for the selected route."));
+                               _("Times, legs, mark checks, the step table and "
+                                 "a comparison of similar routes."));
     wxButton* settings = button(_("Settings"),
                                 _("Chart display, columns and computer "
                                   "settings."));
@@ -2494,7 +2496,7 @@ void WeatherRouting::SetUpDesktopMainWindow() {
       more->PopupMenu(&menu, 0, more->GetSize().y);
     });
     stop->Bind(wxEVT_BUTTON, [this](wxCommandEvent& e) { OnStop(e); });
-    results->Bind(wxEVT_BUTTON, [this](wxCommandEvent& e) { OnReport(e); });
+    results->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { ShowResults(); });
     settings->Bind(wxEVT_BUTTON, [this](wxCommandEvent& e) { OnSettings(e); });
     filter->Bind(wxEVT_TEXT, [this, filter](wxCommandEvent&) {
       m_RouteFilter = filter->GetValue().Trim().Trim(false);
@@ -2559,6 +2561,28 @@ void WeatherRouting::PlanPassageFromChoice() {
                             names);
   if (pick.ShowModal() != wxID_OK) return;
   ShowPassageDialog(keep[pick.GetSelection()]);
+}
+
+std::vector<RouteMapOverlay*> WeatherRouting::SelectedRoutesOrPassage() {
+  std::list<RouteMapOverlay*> selected = CurrentRouteMaps();
+  std::vector<RouteMapOverlay*> out(selected.begin(), selected.end());
+  if (out.empty()) return out;
+  const RouteMapConfiguration first = out.front()->GetConfiguration();
+  if (!first.IsMultiLegGenerated || first.MultiLegGroupId.IsEmpty()) return out;
+  for (RouteMapOverlay* r : out) {
+    const RouteMapConfiguration c = r->GetConfiguration();
+    if (!c.IsMultiLegGenerated || c.MultiLegGroupId != first.MultiLegGroupId)
+      return out;  // a mix of routes: exactly what is selected
+  }
+  std::vector<RouteMapOverlay*> legs = GetMultiLegGroupRoutes(first.MultiLegGroupId);
+  return legs.empty() ? out : legs;
+}
+
+void WeatherRouting::ShowResults() {
+  if (!m_ResultsDialog) m_ResultsDialog = new ResultsDialog(this, *this);
+  m_ResultsDialog->Load();
+  m_ResultsDialog->Show();
+  m_ResultsDialog->Raise();
 }
 
 void WeatherRouting::ShowRouteSettings() {
@@ -6600,6 +6624,7 @@ void WeatherRouting::OnWeatherRouteSelected() {
   }
   if (m_RouteSettingsDialog && m_RouteSettingsDialog->IsShown())
     m_RouteSettingsDialog->Load();
+  if (m_ResultsDialog && m_ResultsDialog->IsShown()) m_ResultsDialog->Load();
 
   UpdateDialogs();
 
