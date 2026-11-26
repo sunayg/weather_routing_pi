@@ -455,7 +455,7 @@ bool Polar::VMGAngle(SailingWindSpeed& ws1, SailingWindSpeed& ws2, float VW,
       W > vmg.values[SailingVMG::PORT_UPWIND])
     W = vmg.values[SailingVMG::STARBOARD_UPWIND];
   else if (W > vmg.values[SailingVMG::STARBOARD_DOWNWIND] &&
-           W < vmg.values[SailingVMG::STARBOARD_DOWNWIND])
+           W < vmg.values[SailingVMG::PORT_DOWNWIND])  // was STARBOARD twice
     W = vmg.values[SailingVMG::STARBOARD_DOWNWIND];
   else
     return false;

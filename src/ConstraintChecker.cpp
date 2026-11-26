@@ -20,6 +20,7 @@
 #include <wx/wx.h>
 
 #include "ConstraintChecker.h"
+#include "CourseCorridor.h"
 #include "ChartSafetyHost.h"
 #include "OffshoreHazards.h"
 #include "ChartSafetyPolicy.h"
@@ -847,51 +848,16 @@ bool ConstraintChecker::CheckCycloneTrackConstraint(
 
 bool ConstraintChecker::CheckMaxCourseAngleConstraint(
     RouteMapConfiguration& configuration, double dlat, double dlon) {
-  if (configuration.MaxCourseAngle < 180) {
-    double bearing;
-    // this is faster than gc distance, and actually works better in higher
-    // latitudes
-    // Native candidates use [-180, 180], while route endpoints may use
-    // [0, 360]. Measure the short longitude difference in either convention.
-    double d1 = dlat - configuration.StartLat,
-           d2 = heading_resolve(dlon - configuration.StartLon);
-    d2 *= cos(deg2rad(dlat)) / 2;  // correct for latitude
-    bearing = rad2deg(atan2(d2, d1));
-
-    if (fabs(heading_resolve(configuration.StartEndBearing - bearing)) >
-        configuration.MaxCourseAngle) {
-      return false;
-    }
-  }
-  return true;
+  return weather_routing::corridor::WithinCourseAngle(
+      configuration.StartLat, configuration.StartLon,
+      configuration.StartEndBearing, configuration.MaxCourseAngle, dlat, dlon);
 }
 
 bool ConstraintChecker::CheckMaxDivertedCourse(
     RouteMapConfiguration& configuration, double dlat, double dlon) {
-  if (configuration.MaxDivertedCourse < 180) {
-    double bearing, dist;
-    double bearing1, dist1;
-
-    double d1 = dlat - configuration.EndLat,
-           d2 = heading_resolve(dlon - configuration.EndLon);
-    d2 *= cos(deg2rad(dlat)) / 2;  // correct for latitude
-    bearing = rad2deg(atan2(d2, d1));
-    dist = sqrt(pow(d1, 2) + pow(d2, 2));
-
-    d1 = configuration.StartLat - dlat;
-    d2 = heading_resolve(configuration.StartLon - dlon);
-    bearing1 = rad2deg(atan2(d2, d1));
-    dist1 = sqrt(pow(d1, 2) + pow(d2, 2));
-
-    double term = (dist1 + dist) / dist;
-    term = pow(term / 16, 4) + 1;  // make 1 until the end, then make big
-
-    if (fabs(heading_resolve(bearing1 - bearing)) >
-        configuration.MaxDivertedCourse * term) {
-      return false;
-    }
-  }
-  return true;
+  return weather_routing::corridor::WithinDivertedCourse(
+      configuration.StartLat, configuration.StartLon, configuration.EndLat,
+      configuration.EndLon, configuration.MaxDivertedCourse, dlat, dlon);
 }
 
 bool ConstraintChecker::CheckLandConstraint(

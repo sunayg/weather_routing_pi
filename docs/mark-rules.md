@@ -86,6 +86,9 @@ keeps the rules.
   uses the bearing from the previous mark to the next one as the direction of
   travel at each via mark.
 - Passing points accumulate in the Positions list; delete old ones there.
+- If a mark of a planned passage is moved later, Compute warns that the
+  legs and side rules still use the old position and offers to plan the
+  passage again.
 - Geometry and leg planning are unit-tested (`test/MarkRules_tests.cpp`).
   A single mark with each rule was checked in OpenCPN. The dialog and
   multi-mark passages have been built but not yet run in OpenCPN.

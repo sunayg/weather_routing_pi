@@ -58,6 +58,7 @@ set(TEST_SRC
     RouteSettingsModel_tests.cpp
     ${WEATHER_ROUTING_SOURCE_DIR}/src/RouteSettingsModel.cpp
     RouteNaming_tests.cpp
+    CourseCorridor_tests.cpp
     ${WEATHER_ROUTING_SOURCE_DIR}/src/RouteNaming.cpp
     RoutingEndpointPreflight_tests.cpp
     ${WEATHER_ROUTING_SOURCE_DIR}/src/RouteWaypointValidation.cpp

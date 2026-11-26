@@ -468,6 +468,14 @@ public:
   /** Computes the selection; legs of one passage compute as the whole
    * passage, in order, each leg starting when the previous one arrives. */
   void ComputeSelection();
+  /** Compute all: passages one after another (legs in order), then the
+   * other routes (review I1). */
+  void ContinueComputeAll();
+  /** Warns when a mark of a planned passage has moved since planning; returns
+   * false when the user chose to plan the passage again (review I2). */
+  bool ConfirmPassageMarksCurrent(const std::vector<RouteMapOverlay*>& legs);
+  std::vector<wxString> m_ComputeAllPassages;
+  bool m_ComputeAllOthers = false;
   class ResultsDialog* m_ResultsDialog = nullptr;
   /** The selection, or every leg of a passage when the selection is one or
    * more legs of the same passage. */

@@ -2261,6 +2261,15 @@ void WeatherRouting::AddRoute(wxString& GUID) {
 
   ApplyNewAdaptiveSettingsChoice(configuration);
 
+  // A new route from an OpenCPN route is standalone (review I3).
+  configuration.PromoteDepartureTimeOptimizationCandidate();
+  configuration.IsMultiLegGenerated = false;
+  configuration.MultiLegGroupId.Clear();
+  configuration.MultiLegParentRouteGUID.Clear();
+  configuration.MultiLegParentRouteName.Clear();
+  configuration.MultiLegLegIndex = 0;
+  configuration.MultiLegLegCount = 0;
+  configuration.MarkRules.clear();
   configuration.RouteGUID = GUID;
   configuration.StartTime = wxDateTime::Now();
   configuration.DeltaTime = 3600;
@@ -2317,6 +2326,7 @@ bool WeatherRouting::CreateMultiLegConfigurationsFromRoute(
   base.MultiLegParentRouteName.Clear();
   base.MultiLegLegIndex = 0;
   base.MultiLegLegCount = 0;
+  base.MarkRules.clear();  // a passage sets each leg's own rules below
 
   wxString routeName = GetRouteNameForGuid(routeGuid);
   wxString groupId = wxString::Format(_T("multileg-%s-%s"), routeGuid,
@@ -2597,6 +2607,84 @@ void WeatherRouting::ComputeSelection() {
       return;
     }
   }
+  wxCommandEvent event;
+  OnCompute(event);
+}
+
+bool WeatherRouting::ConfirmPassageMarksCurrent(
+    const std::vector<RouteMapOverlay*>& legs) {
+  if (legs.empty()) return true;
+  const RouteMapConfiguration first = legs.front()->GetConfiguration();
+  if (first.MultiLegParentRouteGUID.IsEmpty()) return true;
+  std::vector<RouteWaypointInfo> waypoints;
+  wxString error;
+  if (!ExtractOpenCPNRouteWaypoints(first.MultiLegParentRouteGUID, waypoints,
+                                    error) ||
+      waypoints.empty())
+    return true;  // the route is gone; nothing to compare with
+
+  // A side rule stores the mark's position when the passage was planned.
+  // Saved positions may be rounded to about 10 m, so allow 0.03 nm.
+  constexpr double kMovedNm = 0.03;
+  wxString moved;
+  for (RouteMapOverlay* leg : legs) {
+    for (const auto& rule : leg->GetConfiguration().MarkRules) {
+      if (rule.side == weather_routing::MarkSide::Any) continue;
+      double best = 1e9;
+      const RouteWaypointInfo* nearest = nullptr;
+      for (const auto& w : waypoints) {
+        const double d = DistGreatCircle_Plugin(rule.lat, rule.lon, w.lat, w.lon);
+        if (d < best) {
+          best = d;
+          nearest = &w;
+        }
+      }
+      if (nearest && best > kMovedNm &&
+          !moved.Contains(nearest->name + _T(" ")))
+        moved += wxString::Format(_("%s (about %.0f m)\n"), nearest->name,
+                                  best * 1852.0);
+    }
+  }
+  if (moved.IsEmpty()) return true;
+  WR_MessageDialog ask(
+      this,
+      wxString::Format(
+          _("These marks have moved since the passage was planned, so the "
+            "legs and side rules still use their old positions:\n\n%s\n"
+            "Plan the passage again now?"),
+          moved),
+      _("Weather Routing"), wxYES_NO | wxICON_WARNING);
+  if (ask.ShowModal() != wxID_YES) return true;  // compute as it is
+  ShowPassageDialog(first.MultiLegParentRouteGUID);
+  return false;
+}
+
+void WeatherRouting::ContinueComputeAll() {
+  if (!m_ComputeAllPassages.empty()) {
+    const wxString group = m_ComputeAllPassages.front();
+    m_ComputeAllPassages.erase(m_ComputeAllPassages.begin());
+    std::vector<RouteMapOverlay*> legs = GetMultiLegGroupRoutes(group);
+    if (!legs.empty() && ComputeMultiLegSequence(legs.front())) return;
+    ContinueComputeAll();  // skip a passage that could not start
+    return;
+  }
+  if (!m_ComputeAllOthers) return;
+  m_ComputeAllOthers = false;
+  // The remaining ordinary routes: select them and compute the selection.
+  wxListCtrl* list = m_panel->m_lWeatherRoutes;
+  bool any = false;
+  for (long i = 0; i < list->GetItemCount(); ++i) {
+    auto* w = reinterpret_cast<WeatherRoute*>(wxUIntToPtr(list->GetItemData(i)));
+    bool pick = false;
+    if (w && w->routemapoverlay) {
+      const RouteMapConfiguration c = w->routemapoverlay->GetConfiguration();
+      pick = !c.IsMultiLegGenerated && !c.DepartureTimeOptimizationCandidate;
+    }
+    list->SetItemState(i, pick ? wxLIST_STATE_SELECTED : 0,
+                       wxLIST_STATE_SELECTED);
+    any |= pick;
+  }
+  if (!any) return;
   wxCommandEvent event;
   OnCompute(event);
 }
@@ -3859,6 +3947,8 @@ bool WeatherRouting::ComputeMultiLegSequence(RouteMapOverlay* selectedRoute) {
     return false;
   }
 
+  if (!ConfirmPassageMarksCurrent(routes)) return false;
+
   RouteMapConfiguration first = routes.front()->GetConfiguration();
   CancelMultiLegSequence();
   for (auto* route : routes) SetRouteVisibility(route, true, false);
@@ -4007,6 +4097,8 @@ void WeatherRouting::AdvanceMultiLegSequence(RouteMapOverlay* completedRoute) {
     m_ActiveMultiLegSequence = false;
     m_ActiveMultiLegGroupId.Clear();
     m_ActiveMultiLegCurrentLegIndex = 0;
+    m_ComputeAllPassages.clear();  // Compute all stops at a failed passage
+    m_ComputeAllOthers = false;
     return;
   }
 
@@ -4026,6 +4118,8 @@ void WeatherRouting::AdvanceMultiLegSequence(RouteMapOverlay* completedRoute) {
     m_ActiveMultiLegSequence = false;
     m_ActiveMultiLegGroupId.Clear();
     m_ActiveMultiLegCurrentLegIndex = 0;
+    if (!m_ComputeAllPassages.empty() || m_ComputeAllOthers)
+      CallAfter([this]() { ContinueComputeAll(); });
     return;
   }
 
@@ -8485,6 +8579,30 @@ void WeatherRouting::OnComputeAll(wxCommandEvent& event) {
   if (m_RoutePreparationDepth > 0 || m_DeferredRoutingStartPending) return;
   CancelMultiLegSequence();
   CancelMultiLegDepartureOptimization(true);
+  // Passage legs must run in order, each leaving when the previous one
+  // arrives; computing them side by side used stale start times (review I1).
+  {
+    std::vector<wxString> groups;
+    bool others = false;
+    for (WeatherRoute* w : m_WeatherRoutes) {
+      if (!w || !w->routemapoverlay) continue;
+      const RouteMapConfiguration c = w->routemapoverlay->GetConfiguration();
+      if (c.DepartureTimeOptimizationCandidate) continue;
+      if (c.IsMultiLegGenerated && !c.MultiLegGroupId.IsEmpty()) {
+        if (std::find(groups.begin(), groups.end(), c.MultiLegGroupId) ==
+            groups.end())
+          groups.push_back(c.MultiLegGroupId);
+      } else {
+        others = true;
+      }
+    }
+    if (!groups.empty()) {
+      m_ComputeAllPassages = groups;
+      m_ComputeAllOthers = others;
+      ContinueComputeAll();
+      return;
+    }
+  }
   std::list<RouteMapOverlay*> allroutemaps;
   for (int i = 0; i < m_panel->m_lWeatherRoutes->GetItemCount(); i++) {
     WeatherRoute* weatherroute = reinterpret_cast<WeatherRoute*>(
@@ -8510,6 +8628,8 @@ void WeatherRouting::OnComputeAll(wxCommandEvent& event) {
 }
 
 void WeatherRouting::OnStop(wxCommandEvent& event) {
+  m_ComputeAllPassages.clear();
+  m_ComputeAllOthers = false;
   m_ChartSafetyPreparationCancelled.store(true, std::memory_order_relaxed);
   CancelDeferredRoutingStart();
   CancelMultiLegSequence();
@@ -8616,9 +8736,10 @@ void WeatherRouting::OnNew(wxCommandEvent& event) {
 
   ApplyNewAdaptiveSettingsChoice(configuration);
 
-#ifdef __OCPN__ANDROID__
   // Create a standalone plan using the selected route's settings. A passage
-  // leg's identity must not make the new plan another member of that passage.
+  // leg's identity must not make the new plan another member of that passage,
+  // and its mark rules belong to its own marks (review I3; this used to apply
+  // on Android only).
   configuration.RouteGUID.Clear();
   configuration.PromoteDepartureTimeOptimizationCandidate();
   configuration.IsMultiLegGenerated = false;
@@ -8627,7 +8748,7 @@ void WeatherRouting::OnNew(wxCommandEvent& event) {
   configuration.MultiLegParentRouteName.Clear();
   configuration.MultiLegLegIndex = 0;
   configuration.MultiLegLegCount = 0;
-#endif
+  configuration.MarkRules.clear();
 
   AddConfiguration(configuration);
 
@@ -8733,6 +8854,11 @@ void WeatherRouting::GenerateBatch() {
     configuration.MultiLegParentRouteName.Clear();
     configuration.MultiLegLegIndex = 0;
     configuration.MultiLegLegCount = 0;
+    // Mark rules belong to the template's own start and finish; a variation
+    // between other positions must not inherit its barriers (review I3).
+    const auto templateRules = configuration.MarkRules;
+    const wxString templateStart = configuration.Start;
+    const wxString templateEnd = configuration.End;
 
     EndTime = configuration.StartTime + StartSpan;
 
@@ -8755,6 +8881,11 @@ void WeatherRouting::GenerateBatch() {
                  windstrength <= dlg.m_sWindStrengthMax->GetValue();
                  windstrength += dlg.m_sWindStrengthStep->GetValue()) {
               configuration.WindStrength = windstrength / 100.0;
+              if (configuration.Start == templateStart &&
+                  configuration.End == templateEnd)
+                configuration.MarkRules = templateRules;
+              else
+                configuration.MarkRules.clear();
 
               AddConfiguration(configuration);
               m_WeatherRoutes.back()->routemapoverlay->LoadBoat();
