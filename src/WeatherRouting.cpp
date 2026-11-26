@@ -1541,8 +1541,8 @@ WeatherRouting::WeatherRouting(wxWindow* parent, weather_routing_pi& plugin)
   m_panel->m_lPositions->InsertColumn(POSITION_LAT, _("Lat"));
   m_panel->m_lPositions->InsertColumn(POSITION_LON, _("Lon"));
   m_panel->m_lWeatherRoutes->SetToolTip(
-      _("Wx reports wind sources used by the accepted route. Orange route "
-        "wind barbs mark climatology-sourced legs."));
+      _("Double-click a route to change its settings; right-click for more. "
+        "Orange wind barbs on a route mark climatology wind."));
 
   wxImageList* imglist = new wxImageList(20, 20, true, 1);
   imglist->Add(wxBitmap(eye));
@@ -5836,11 +5836,17 @@ void WeatherRouting::UpdateColumns() {
       wxString name = _(column_names[i]);
 
       if (i == STARTTIME || i == ENDTIME) {
+#ifdef __OCPN__ANDROID__
         name += _T(" (") +
                 (m_SettingsDialog.UseLocalTimeZone()
                      ? m_SettingsDialog.DisplayTimeZone()
                      : wxString("UTC")) +
                 _T(")");
+#else
+        // Each time already shows its zone ("15:00 IST"); a short heading
+        // keeps distance and state on screen.
+        name = i == STARTTIME ? _("Departs") : _("Arrives");
+#endif
       } else if (i == DISTANCE) {
         name += _T(" (") + getUsrDistanceUnit_Plugin() + _T(")");
       } else if (i == AVGSPEED || i == MAXSPEED || i == AVGSPEEDGROUND ||
