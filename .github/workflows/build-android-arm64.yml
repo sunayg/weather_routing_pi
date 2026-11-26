@@ -1,18 +1,12 @@
 # Builds the Android arm64 plugin package, the same steps as the CircleCI
 # android-arm64 job. Download the result from the run's Artifacts section.
+# Started by hand only.
 name: build-android-arm64
 
 on:
+  # Manual only: run it from the Actions tab (or `gh workflow run`) when an
+  # Android build is wanted. It no longer runs on every push.
   workflow_dispatch:
-  push:
-    branches: ['feature/**']
-    paths:
-      - 'CMakeLists.txt'
-      - 'src/**'
-      - 'include/**'
-      - 'data/**'
-      - 'ci/build-android-arm64.sh'
-      - '.github/workflows/build-android-arm64.yml'
 
 jobs:
   android-arm64:
