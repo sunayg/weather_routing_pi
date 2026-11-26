@@ -27,6 +27,8 @@
 #include <cstdint>
 
 #include <wx/wx.h>
+#include <wx/notebook.h>
+#include <functional>
 
 #include "Boat.h"
 #include "BoatDialog.h"
@@ -51,6 +53,9 @@ EditPolarDialog::EditPolarDialog(wxWindow* parent)
           wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER | wxSTAY_ON_TOP),
 #endif
       m_BoatDialog(static_cast<BoatDialog*>(parent)) {
+#ifndef __OCPN__ANDROID__
+  TidyLabels();
+#endif
   //	m_gPolar->Connect( wxEVT_GRID_CELL_CHANGED, wxGridEventHandler(
   // EditPolarDialogBase::OnPolarGridChanged ), NULL, this );
 
@@ -601,4 +606,37 @@ void EditPolarDialog::ShowAndroidMeasurement() {
 
 Polar* EditPolarDialog::GetPolar() {
   return polarindex == -1 ? NULL : &m_BoatDialog->m_Boat.Polars[polarindex];
+}
+
+// Plain names for the tabs, the generated typos fixed, and leftovers removed
+// (docs/ui-redesign.md, Edit polar).
+void EditPolarDialog::TidyLabels() {
+  const std::pair<const char*, wxString> fixes[] = {
+      {"True WInd Speeds", _("True wind speeds")},
+      {"Boat Spead", _("Boat speed")},
+  };
+  std::function<void(wxWindow*)> walk = [&](wxWindow* w) {
+    for (wxWindow* child : w->GetChildren()) {
+      for (const auto& [from, to] : fixes)
+        if (child->GetLabel() == wxGetTranslation(from)) child->SetLabel(to);
+      walk(child);
+    }
+  };
+  walk(this);
+  if (m_button461) m_button461->Hide();  // placeholder "MyButton"
+  if (m_cHullType) {
+    const int sub = m_cHullType->FindString(_("Submarine"));
+    if (sub != wxNOT_FOUND && m_cHullType->GetSelection() != sub)
+      m_cHullType->Delete(sub);
+  }
+  auto rename = [](wxNotebook* book, const wxString& from, const wxString& to) {
+    if (!book) return;
+    for (size_t i = 0; i < book->GetPageCount(); ++i)
+      if (book->GetPageText(i) == from) book->SetPageText(i, to);
+  };
+  rename(m_notebook6, _("Grid"), _("Speeds"));
+  rename(m_notebook6, _("Dimensions"), _("Angles and wind speeds"));
+  rename(m_notebook6, _("Generate"), _("Generate a polar"));
+  rename(m_notebook61, _("Measurements"), _("From an NMEA log"));
+  rename(m_notebook61, _("Boat Characteristics"), _("From boat size"));
 }

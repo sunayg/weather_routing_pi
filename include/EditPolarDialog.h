@@ -30,6 +30,7 @@ class Polar;
 class EditPolarDialog : public EditPolarDialogBase {
 public:
   EditPolarDialog(wxWindow* parent);
+  void TidyLabels();
 
   void SetPolarIndex(int i);
 #ifdef __OCPN__ANDROID__

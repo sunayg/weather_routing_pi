@@ -319,6 +319,66 @@ BoatDialog::BoatDialog(WeatherRouting& weatherrouting)
     RefreshPlots();
     event.Skip();
   });
+#ifndef __OCPN__ANDROID__
+  ApplyCompactLayout();
+#endif
+}
+
+void BoatDialog::ApplyCompactLayout() {
+  // The splitter's two panels become a vertical stack: the sails first (what
+  // the boat is made of), then the plots.
+  wxSizer* top = GetSizer();
+  if (!top || !m_splitter2 || !m_panel20 || !m_panel21) return;
+  m_splitter2->Unsplit();
+  top->Detach(m_splitter2);
+  m_panel21->Reparent(this);
+  m_panel20->Reparent(this);
+  m_panel21->Show();  // Unsplit hid the second pane
+  m_panel20->Show();
+  m_splitter2->Hide();
+
+  wxStaticText* sails = new wxStaticText(this, wxID_ANY, _("Sails (polars)"));
+  wxFont bold = sails->GetFont();
+  bold.SetWeight(wxFONTWEIGHT_BOLD);
+  sails->SetFont(bold);
+  wxStaticText* hint = new wxStaticText(
+      this, wxID_ANY,
+      _("The router uses whichever polar is fastest at each wind angle and "
+        "speed, so a spinnaker polar only takes over where it is faster."));
+  hint->Wrap(WR_FromDIP(this, 520));
+  wxStaticText* plots = new wxStaticText(this, wxID_ANY, _("Performance"));
+  plots->SetFont(bold);
+
+  wxBoxSizer* stack = new wxBoxSizer(wxVERTICAL);
+  stack->Add(sails, 0, wxLEFT | wxRIGHT | wxTOP, WR_FromDIP(this, 10));
+  stack->Add(hint, 0, wxLEFT | wxRIGHT, WR_FromDIP(this, 10));
+  stack->Add(m_panel21, 0, wxEXPAND | wxALL, WR_FromDIP(this, 5));
+  stack->Add(plots, 0, wxLEFT | wxRIGHT, WR_FromDIP(this, 10));
+  stack->Add(m_panel20, 1, wxEXPAND | wxALL, WR_FromDIP(this, 5));
+  if (auto* flex = dynamic_cast<wxFlexGridSizer*>(top)) {
+    flex->Insert(0, stack, 1, wxEXPAND);
+  } else {
+    top->Insert(0, stack, 1, wxEXPAND);
+  }
+  m_lPolars->SetMinSize(wxSize(-1, WR_FromDIP(this, 90)));
+
+  const std::pair<wxButton*, wxString> labels[] = {
+      {m_bAddPolar, _("Add polar...")},  {m_bEditPolar, _("Edit...")},
+      {m_bRemovePolar, _("Remove")},     {m_bUp, _("Move up")},
+      {m_bDown, _("Move down")},         {m_bOpenBoat, _("Open boat...")},
+      {m_bSaveBoat, _("Save")},          {m_bSaveAsBoat, _("Save as...")},
+  };
+  for (const auto& [button, text] : labels)
+    if (button) button->SetLabel(text);
+  const wxString pages[] = {_("Polar"), _("Cross-over"), _("Best angles")};
+  for (size_t i = 0; i < m_nNotebook->GetPageCount() && i < WXSIZEOF(pages); ++i)
+    m_nNotebook->SetPageText(i, pages[i]);
+  if (m_lPolars->GetColumnCount() > 0) {
+    wxListItem col;
+    col.SetText(_("Polar file"));
+    m_lPolars->SetColumn(0, col);
+  }
+  Layout();
 }
 
 void BoatDialog::BuildWindPolicyControls() {

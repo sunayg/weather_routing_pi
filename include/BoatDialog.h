@@ -31,6 +31,8 @@ class BoatDialog : public BoatDialogBase {
 public:
   BoatDialog(WeatherRouting& weatherrouting);
   ~BoatDialog();
+  // Desktop: sails list on top, plots below, plain labels (ui-redesign).
+  void ApplyCompactLayout();
 
   void LoadPolar(const wxString& filename);
 
