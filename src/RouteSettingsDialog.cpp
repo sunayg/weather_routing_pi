@@ -6,12 +6,14 @@
 #include <wx/dir.h>
 #include <wx/filename.h>
 #include <wx/spinctrl.h>
+#include <wx/filepicker.h>
 
 #include <algorithm>
 #include <list>
 #include <cmath>
 
 #include "RouteMapOverlay.h"
+#include "CurrentGribFile.h"
 #include "RouteSettingsDialog.h"
 #include "ConfigurationDialog.h"
 #include "BoatDialog.h"
@@ -207,7 +209,40 @@ RouteSettingsDialog::RouteSettingsDialog(wxWindow* parent,
     rowLabel(title);
     grid->Add(BuildFieldRows(m_scroll, section), 1, wxEXPAND);
   };
-  addPlainSection(_("Weather"), S::Weather);
+  {
+    // Weather: the model rows plus the current file, read directly so a
+    // tidal current forecast need not be merged into the wind GRIB.
+    rowLabel(_("Weather"));
+    wxBoxSizer* v = new wxBoxSizer(wxVERTICAL);
+    v->Add(BuildFieldRows(m_scroll, S::Weather), 0, wxEXPAND);
+    wxBoxSizer* row = new wxBoxSizer(wxHORIZONTAL);
+    row->Add(new wxStaticText(m_scroll, wxID_ANY, _("Current file")), 0,
+             wxALIGN_CENTER_VERTICAL | wxRIGHT, WR_DIP(5));
+    m_currentFile = new wxFilePickerCtrl(
+        m_scroll, wxID_ANY, wxEmptyString, _("Choose a current GRIB file"),
+        _("GRIB files (*.grb;*.grib;*.grb1;*.grib1)|*.grb;*.grib;*.grb1;*.grib1|"
+          "All files|*"),
+        wxDefaultPosition, wxSize(WR_DIP(260), -1),
+        wxFLP_OPEN | wxFLP_FILE_MUST_EXIST | wxFLP_USE_TEXTCTRL);
+    m_currentFile->SetToolTip(
+        _("A GRIB1 file with current (for example a tidal stream forecast). "
+          "Where it covers the route it is used instead of the current in the "
+          "GRIB plugin or climatology, so it need not be merged into the wind "
+          "file. Tidal current must be ticked."));
+    wxButton* clear = new wxButton(m_scroll, wxID_ANY, _("Clear"),
+                                   wxDefaultPosition, wxDefaultSize,
+                                   wxBU_EXACTFIT);
+    row->Add(m_currentFile, 1, wxALIGN_CENTER_VERTICAL | wxRIGHT, WR_DIP(5));
+    row->Add(clear, 0, wxALIGN_CENTER_VERTICAL);
+    v->Add(row, 0, wxEXPAND | wxTOP, WR_DIP(4));
+    m_currentInfo = new wxStaticText(m_scroll, wxID_ANY, wxEmptyString);
+    v->Add(m_currentInfo, 0, wxTOP, WR_DIP(2));
+    grid->Add(v, 1, wxEXPAND);
+    m_currentFile->Bind(wxEVT_FILEPICKER_CHANGED, [this](wxFileDirPickerEvent& e) {
+      OnCurrentFile(e.GetPath());
+    });
+    clear->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { OnCurrentFile(wxEmptyString); });
+  }
   addPlainSection(_("Limits"), S::Limits);
   addPlainSection(_("Safety"), S::Safety);
   addPlainSection(_("Motoring"), S::Motoring);
@@ -572,6 +607,37 @@ void RouteSettingsDialog::Load() {
     }
   }
 
+  {
+    wxString path, info;
+    bool same = true;
+    for (const auto& r : routes)
+      same &= r.CurrentFile == routes.front().CurrentFile;
+    if (any && same) path = routes.front().CurrentFile;
+    m_currentFile->SetPath(path);
+    if (any && !same) {
+      info = _("(mixed)");
+    } else if (!path.IsEmpty()) {
+      std::string error;
+      auto file = wr::CurrentGribFile::Cached(std::string(path.ToUTF8()), &error);
+      if (!file) {
+        info = wxString::Format(_("Cannot read it: %s"), wxString::FromUTF8(error));
+      } else {
+        const auto& g = file->Grids().front();
+        const double lat2 = g.lat_first + g.dlat * (g.nj - 1);
+        const double lon2 = g.lon_first + g.dlon * (g.ni - 1);
+        info = wxString::Format(
+            _("Covers %s to %s, %.2f-%.2f N, %.2f-%.2f E"),
+            wxDateTime(file->FirstTime()).Format(_T("%a %d %b %H:%M")),
+            wxDateTime(file->LastTime()).Format(_T("%a %d %b %H:%M")),
+            std::min(g.lat_first, lat2), std::max(g.lat_first, lat2),
+            std::min(g.lon_first, lon2), std::max(g.lon_first, lon2));
+      }
+    } else {
+      info = _("None: current comes from the GRIB plugin or climatology.");
+    }
+    m_currentInfo->SetLabel(info);
+  }
+
   for (auto& [id, fc] : m_fields) {
     const wr::FieldSummary s = wr::Summarize(*fc.field, routes);
     fc.mixed->Show(any && s.mixed);
@@ -741,6 +807,24 @@ void RouteSettingsDialog::OnStartEnd(bool start) {
       c.EndGUID = item.type == 1 ? item.guid : wxString();
     }
   });
+}
+
+void RouteSettingsDialog::OnCurrentFile(const wxString& path) {
+  if (m_loading) return;
+  if (!path.IsEmpty()) {
+    std::string error;
+    if (!wr::CurrentGribFile::Cached(std::string(path.ToUTF8()), &error)) {
+      WR_MessageDialog bad(this,
+                           wxString::Format(_("This file has no usable current "
+                                              "data:\n%s"),
+                                            wxString::FromUTF8(error)),
+                           _("Weather Routing"), wxOK | wxICON_WARNING);
+      bad.ShowModal();
+      Load();
+      return;
+    }
+  }
+  Commit([path](RouteMapConfiguration& c) { c.CurrentFile = path; });
 }
 
 void RouteSettingsDialog::OnBoat() {

@@ -2742,7 +2742,12 @@ bool WeatherRouting::ShowPassageDialog(const wxString& routeGuid) {
     return wxString::Format(
         _("%s, accuracy %s, current %s, avoid land %s"), boat,
         weather_routing::AccuracyLabel(weather_routing::DetectAccuracy(c)),
-        c.Currents ? _("on") : _("off"), c.DetectLand ? _("on") : _("off"));
+        !c.Currents ? wxString(_("off"))
+        : c.CurrentFile.IsEmpty()
+            ? wxString(_("on"))
+            : wxString::Format(_("from %s"),
+                               wxFileName(c.CurrentFile).GetFullName()),
+        c.DetectLand ? _("on") : _("off"));
   };
   auto change = [this]() {
     if (FirstCurrentRouteMap()) ShowRouteSettings();
@@ -14320,6 +14325,7 @@ void WeatherRouting::SaveLastUsedConfigurationDefaults(
   pConf->Write(_T("MaxTrueWindKnots"), configuration.MaxTrueWindKnots);
   pConf->Write(_T("MaxApparentWindKnots"), configuration.MaxApparentWindKnots);
   pConf->Write(_T("MaxUpwindTrueWindKnots"), configuration.MaxUpwindTrueWindKnots);
+  pConf->Write(_T("CurrentFile"), configuration.CurrentFile);
   pConf->Write(_T("MinTrueWindKnots"), configuration.MinTrueWindKnots);
   pConf->Write(_T("MaxSwellMeters"), configuration.MaxSwellMeters);
   pConf->Write(_T("RequireWaveCoverage"), configuration.RequireWaveCoverage);
@@ -14416,6 +14422,8 @@ void WeatherRouting::ApplyLastUsedConfigurationDefaults(
               configuration.MaxUpwindTrueWindKnots);
   pConf->Read(_T("MinTrueWindKnots"), &configuration.MinTrueWindKnots,
               configuration.MinTrueWindKnots);
+  pConf->Read(_T("CurrentFile"), &configuration.CurrentFile,
+              configuration.CurrentFile);
   pConf->Read(_T("RequireWaveCoverage"), &configuration.RequireWaveCoverage, false);
   pConf->Read(_T("MaxSwellMeters"), &configuration.MaxSwellMeters,
               configuration.MaxSwellMeters);

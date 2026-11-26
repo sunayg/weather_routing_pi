@@ -420,6 +420,11 @@ struct RouteMapConfiguration {
   /** The name of the boat XML file referencing polars. */
   wxString boatFileName;
 
+  /** Optional GRIB1 file with current (UOGRD/VOGRD), for example a tidal
+   * stream forecast. Where it covers a position and time it takes precedence
+   * over current in the GRIB plugin and climatology; empty = not used. */
+  wxString CurrentFile;
+
   enum IntegratorType { NEWTON, RUNGE_KUTTA } Integrator;
 
   /**

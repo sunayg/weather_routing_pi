@@ -22,6 +22,7 @@ class wxButton;
 class wxCheckBox;
 class wxChoice;
 class wxDatePickerCtrl;
+class wxFilePickerCtrl;
 class wxPanel;
 class wxScrolledWindow;
 class wxSpinCtrl;
@@ -102,6 +103,10 @@ class RouteSettingsDialog : public wxDialog {
   wxSpinCtrl* m_hour = nullptr;
   wxSpinCtrl* m_minute = nullptr;
   wxStaticText* m_timeNote = nullptr;
+
+  wxFilePickerCtrl* m_currentFile = nullptr;
+  wxStaticText* m_currentInfo = nullptr;
+  void OnCurrentFile(const wxString& path);
 
   wxChoice* m_accuracy = nullptr;
   wxButton* m_customButton = nullptr;

@@ -474,6 +474,11 @@ void ResultsDialog::LoadDetails(const std::vector<RouteMapOverlay*>& routes) {
   text += _("Settings used\n");
   text += wxString::Format(_("  Boat: %s\n"),
                            wxFileName(configs.front().boatFileName).GetName());
+  text += wxString::Format(
+      _("  Current file: %s\n"),
+      configs.front().CurrentFile.IsEmpty()
+          ? wxString(_("none"))
+          : wxFileName(configs.front().CurrentFile).GetFullName());
   const auto accuracy = wr::SummarizeAccuracy(configs);
   text += wxString::Format(_("  Accuracy: %s\n"),
                            accuracy ? wr::AccuracyLabel(*accuracy)

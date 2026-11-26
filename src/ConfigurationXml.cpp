@@ -132,6 +132,8 @@ void ReadConfigurationXml(TiXmlElement* e, RouteMapConfiguration& configuration,
   configuration.End = wxString::FromUTF8(e->Attribute("End"));
   configuration.DeltaTime = AttributeDouble(e, "dt", 0);
 
+  if (const char* current = e->Attribute("CurrentFile"))
+    configuration.CurrentFile = wxString::FromUTF8(current);
   configuration.boatFileName = wxString::FromUTF8(e->Attribute("Boat"));
   if (options.resolve_boat)
     configuration.boatFileName = options.resolve_boat(configuration.boatFileName);
@@ -312,6 +314,8 @@ void WriteConfigurationXml(const RouteMapConfiguration& configuration,
   c->SetDoubleAttribute("dt", configuration.DeltaTime);
 
   c->SetAttribute("Boat", configuration.boatFileName.ToUTF8());
+  if (!configuration.CurrentFile.IsEmpty())
+    c->SetAttribute("CurrentFile", configuration.CurrentFile.ToUTF8());
 
   c->SetAttribute("Integrator", configuration.Integrator);
 

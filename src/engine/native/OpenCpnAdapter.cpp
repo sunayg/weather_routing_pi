@@ -2,6 +2,7 @@
 #include <wx/colour.h>
 #include <wx/datetime.h>
 #include <wx/font.h>
+#include <wx/filename.h>
 
 #include <algorithm>
 #include <bit>
@@ -31,6 +32,7 @@
 #include "RoutingResourcePolicy.h"
 #include "SunCalculator.h"
 #include "WindLimits.h"
+#include "CurrentGribFile.h"
 #include "SystemMemory.h"
 #include "CalculationHelperPolicy.h"
 #include "WeatherDataProvider.h"
@@ -69,6 +71,46 @@ wxDateTime ToWx(wr::TimePoint time) {
 wr::TimePoint ToNative(const wxDateTime& time) {
   return wr::TimePoint{
       wr::Duration{static_cast<std::int64_t>(time.GetTicks())}};
+}
+
+// Current from the route's own current file (for example a tidal stream
+// forecast), used first where the file covers the position and time, so it
+// need not be merged into the wind GRIB loaded in the GRIB plugin. Providers
+// load the file once when they are created (LoadCurrentFile).
+std::shared_ptr<const weather_routing::CurrentGribFile> LoadCurrentFile(
+    const RouteMapConfiguration& c) {
+  if (!c.Currents || c.CurrentFile.IsEmpty()) return nullptr;
+  std::string error;
+  auto file = weather_routing::CurrentGribFile::Cached(
+      std::string(c.CurrentFile.ToUTF8()), &error);
+  if (!file)
+    wxLogMessage("WR_CURRENT_FILE unavailable path=\"%s\" error=\"%s\"",
+                 c.CurrentFile, wxString::FromUTF8(error));
+  return file;
+}
+
+bool CurrentFromFile(const weather_routing::CurrentGribFile* file,
+                     const wxString& path, wr::GeoPoint p, wr::TimePoint t,
+                     wr::CurrentSample* out) {
+  if (!file) return false;
+  double u = 0, v = 0;
+  if (!file->Sample(p.latitude, p.longitude,
+                    static_cast<std::time_t>(t.time_since_epoch().count()), &u,
+                    &v))
+    return false;
+  const double knots = std::hypot(u, v) * 1.9438444924406046;
+  double toward = std::atan2(u, v) * 180.0 / M_PI;
+  if (toward < 0) toward += 360.0;
+  out->available = true;
+  out->velocity = wr::speedDirectionToVector(knots, toward);
+  out->metadata = {wr::EnvironmentalSource::XtdCurrentPrediction,
+                   "current file",
+                   std::string(wxFileName(path).GetFullName().ToUTF8()),
+                   {},
+                   t,
+                   {},
+                   {}};
+  return true;
 }
 
 bool Complete(wr::RoutingStatus status) {
@@ -193,6 +235,7 @@ public:
     // search headings. Preserve independent mutable per-query snapshots.
     configuration_.boat.Polars.clear();
     configuration_.DegreeSteps.clear();
+    currentFile_ = LoadCurrentFile(configuration_);
   }
 
   ~OpenCpnWeatherProvider() override {
@@ -278,6 +321,10 @@ public:
 
   wr::CurrentSample current(wr::GeoPoint position,
                             wr::TimePoint time) const override {
+    wr::CurrentSample fromFile;
+    if (CurrentFromFile(currentFile_.get(), configuration_.CurrentFile,
+                        position, time, &fromFile))
+      return fromFile;
     const OpenCpnSample sample = load(position, time);
     wr::CurrentSample result;
     if (!configuration_.Currents || !sample.available ||
@@ -618,6 +665,7 @@ private:
     return result;
   }
 
+  std::shared_ptr<const weather_routing::CurrentGribFile> currentFile_;
   RouteMapOverlay& overlay_;
   RouteMapConfiguration configuration_;
   std::shared_ptr<std::atomic_bool> methodStop_;
@@ -1095,12 +1143,19 @@ class AdaptiveWeatherProbe final : public wr::WeatherProvider {
 public:
   AdaptiveWeatherProbe(RouteMapOverlay& overlay, RouteMapConfiguration configuration)
       : overlay_(overlay), configuration_(std::move(configuration)),
-        deadline_(std::chrono::steady_clock::now() + std::chrono::milliseconds{500}) {}
+        deadline_(std::chrono::steady_clock::now() + std::chrono::milliseconds{500}),
+        currentFile_(LoadCurrentFile(configuration_)) {}
   wr::ParameterCoverage windCoverage() const override { return {}; }
   wr::ParameterCoverage currentCoverage() const override { return {}; }
   wr::ParameterCoverage waveCoverage() const override { return {}; }
   wr::WindSample wind(wr::GeoPoint p, wr::TimePoint t) const override { return sample(p,t).wind; }
-  wr::CurrentSample current(wr::GeoPoint p, wr::TimePoint t) const override { return sample(p,t).current; }
+  wr::CurrentSample current(wr::GeoPoint p, wr::TimePoint t) const override {
+    wr::CurrentSample fromFile;
+    if (CurrentFromFile(currentFile_.get(), configuration_.CurrentFile, p, t,
+                        &fromFile))
+      return fromFile;
+    return sample(p,t).current;
+  }
   wr::WaveSample waves(wr::GeoPoint p, wr::TimePoint t) const override { return sample(p,t).waves; }
   std::string identity() const override { return "resident data / permitted prepared Climatology estimates"; }
 private:
@@ -1160,6 +1215,7 @@ private:
   RouteMapOverlay& overlay_;
   RouteMapConfiguration configuration_;
   std::chrono::steady_clock::time_point deadline_;
+  std::shared_ptr<const weather_routing::CurrentGribFile> currentFile_;
   mutable bool valid_{};
   mutable wr::GeoPoint position_;
   mutable wr::TimePoint time_;

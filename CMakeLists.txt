@@ -296,6 +296,7 @@ SET(SRCS
             src/RouteSettingsDialog.cpp
             src/RouteNaming.cpp
             src/ResultsDialog.cpp
+            src/CurrentGribFile.cpp
             src/ClimatologyThreadGuard.cpp
             src/Polar.cpp
             src/Boat.cpp
