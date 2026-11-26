@@ -2448,8 +2448,7 @@ void WeatherRouting::SetUpDesktopMainWindow() {
   if (grid) {
     wxBoxSizer* bar = new wxBoxSizer(wxHORIZONTAL);
     auto button = [&](const wxString& label, const wxString& tip) {
-      wxButton* b = new wxButton(parent, wxID_ANY, label, wxDefaultPosition,
-                                 wxDefaultSize, wxBU_EXACTFIT);
+      wxButton* b = new wxButton(parent, wxID_ANY, label);
       b->SetToolTip(tip);
       bar->Add(b, 0, wxRIGHT | wxALIGN_CENTER_VERTICAL, 4);
       return b;
@@ -2462,8 +2461,10 @@ void WeatherRouting::SetUpDesktopMainWindow() {
     plan->SetFont(bold);
     wxButton* add = button(_("New route"), _("Add a route from start to end."));
     wxButton* compute = button(_("Compute"), _("Compute the selected routes."));
-    wxButton* more = button(wxString::FromUTF8("▾"),
-                            _("More compute options"));
+    wxButton* more = new wxButton(parent, wxID_ANY, wxString::FromUTF8("\u25BE"),
+                                  wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
+    more->SetToolTip(_("More compute options"));
+    bar->Add(more, 0, wxRIGHT | wxALIGN_CENTER_VERTICAL, 4);
     wxButton* stop = button(_("Stop"), _("Stop computing."));
     wxButton* results = button(_("Results"),
                                _("Details and report for the selected route."));
@@ -5869,6 +5870,23 @@ void WeatherRouting::UpdateColumns() {
 
   OnWeatherRouteSelected();  // update utc/local switch if configuration dialog
                              // is visible
+  FitRouteColumnsToHeaders();
+}
+
+void WeatherRouting::FitRouteColumnsToHeaders() {
+  // Columns are sized to their contents ("N/A" is narrower than "Distance");
+  // never let a column be narrower than its own heading.
+  wxListCtrl* list = m_panel ? m_panel->m_lWeatherRoutes : nullptr;
+  if (!list) return;
+  for (int col = 0; col < list->GetColumnCount(); ++col) {
+    if (col == columns[VISIBLE]) continue;
+    wxListItem item;
+    item.SetMask(wxLIST_MASK_TEXT);
+    if (!list->GetColumn(col, item)) continue;
+    const int header =
+        list->GetTextExtent(item.GetText()).x + WR_FromDIP(list, 20);
+    if (list->GetColumnWidth(col) < header) list->SetColumnWidth(col, header);
+  }
 }
 
 static void SetInspectorLabel(wxStaticText* label, const wxString& value) {
@@ -11116,6 +11134,7 @@ void WeatherRouting::UpdateItem(long index, bool stateonly) {
                                        weatherroute->State);
     m_panel->m_lWeatherRoutes->SetColumnWidth(columns[STATE], wxLIST_AUTOSIZE);
   }
+  FitRouteColumnsToHeaders();
 }
 
 // The configuration changed, so stop computation and update the display in the

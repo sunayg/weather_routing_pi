@@ -464,6 +464,7 @@ public:
   void ShowRouteSettings();
   /** Desktop main window: toolbar, filter box and shorter menus. */
   void SetUpDesktopMainWindow();
+  void FitRouteColumnsToHeaders();
   /** Asks for an OpenCPN route, then opens Plan Passage for it. */
   void PlanPassageFromChoice();
   wxString m_RouteFilter;
