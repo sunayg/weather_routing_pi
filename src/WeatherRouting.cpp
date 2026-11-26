@@ -2464,6 +2464,9 @@ void WeatherRouting::SetUpDesktopMainWindow() {
     wxButton* more = new wxButton(parent, wxID_ANY, wxString::FromUTF8("\u25BE"),
                                   wxDefaultPosition, wxDefaultSize, wxBU_EXACTFIT);
     more->SetToolTip(_("More compute options"));
+    // Exact fit also shrinks the height on GTK; match the Compute button.
+    const int h = compute->GetBestSize().y;
+    more->SetMinSize(wxSize(h, h));
     bar->Add(more, 0, wxRIGHT | wxALIGN_CENTER_VERTICAL, 4);
     wxButton* stop = button(_("Stop"), _("Stop computing."));
     wxButton* results = button(_("Results"),
