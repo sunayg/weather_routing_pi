@@ -151,6 +151,23 @@ ConfigurationBatchDialog::ConfigurationBatchDialog(WeatherRouting* parent)
   CentreOnParent();
 
 #endif
+#ifndef __OCPN__ANDROID__
+  // Desktop (docs/ui-redesign.md, Compare variations): what this window is
+  // for, in plain words. The routes it makes appear in Results > Compare.
+  SetTitle(_("Compare variations"));
+  const wxString pages[] = {_("Departure times"), _("Starts and finishes"),
+                            _("Boats"), _("Wind strength")};
+  for (size_t i = 0;
+       i < m_notebookConfigurations->GetPageCount() && i < WXSIZEOF(pages); ++i)
+    m_notebookConfigurations->SetPageText(i, pages[i]);
+  m_bGenerate->SetLabel(_("Create routes"));
+  m_bGenerate->SetToolTip(_("Make one route for every combination chosen on "
+                            "these pages. Compare them in Results > Compare."));
+  m_bOK->SetLabel(_("Close"));
+  m_bInformation->SetLabel(_("Help"));
+  m_bReset->SetLabel(_("Reset choices"));
+  Layout();
+#endif
 }
 
 void ConfigurationBatchDialog::Render(piDC& dc, PlugIn_ViewPort& vp) {

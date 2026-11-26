@@ -64,6 +64,7 @@
 #include "PassageDialog.h"
 #include "ConfigurationXml.h"
 #include "RouteSettingsDialog.h"
+#include "RouteSettingsModel.h"
 #include "RouteNaming.h"
 #include "ResultsDialog.h"
 #include "RouteWaypointExtractor.h"
@@ -2509,6 +2510,10 @@ void WeatherRouting::SetUpDesktopMainWindow() {
     grid->Insert(0, bar, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 5);
     if (grid->IsRowGrowable(0)) grid->RemoveGrowableRow(0);
     grid->AddGrowableRow(1);
+    // Status line under the list.
+    m_StatusLine = new wxStaticText(parent, wxID_ANY, wxEmptyString);
+    grid->SetRows(grid->GetRows() + 1);
+    grid->Add(m_StatusLine, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 5);
     for (wxWindow* w : std::initializer_list<wxWindow*>{
              m_panel->m_bCompute, m_panel->m_bSaveAsTrack,
              m_panel->m_bSimplifyRoute, m_panel->m_bSaveAsRoute,
@@ -2537,6 +2542,10 @@ void WeatherRouting::SetUpDesktopMainWindow() {
       }
     }
   }
+  // Batch is now "Compare variations" (same window, plainer name).
+  for (wxMenuItem* item : {m_mBatch, m_mBatch1})
+    if (item) item->SetItemLabel(_("Compare &variations...") + wxT("\tCtrl+B"));
+  m_ConfigurationBatchDialog.SetTitle(_("Compare variations"));
   m_panel->Layout();
 }
 
@@ -2636,8 +2645,22 @@ bool WeatherRouting::ShowPassageDialog(const wxString& routeGuid) {
   if (FirstCurrentRouteMap())
     defaultStart = FirstCurrentRouteMap()->GetConfiguration().StartTime;
 
+  auto summary = [this]() -> wxString {
+    RouteMapConfiguration c = FirstCurrentRouteMap()
+                                  ? FirstCurrentRouteMap()->GetConfiguration()
+                                  : DefaultConfiguration();
+    wxString boat = wxFileName(c.boatFileName).GetName();
+    if (boat.IsEmpty()) boat = _("no boat chosen");
+    return wxString::Format(
+        _("%s, accuracy %s, current %s, avoid land %s"), boat,
+        weather_routing::AccuracyLabel(weather_routing::DetectAccuracy(c)),
+        c.Currents ? _("on") : _("off"), c.DetectLand ? _("on") : _("off"));
+  };
+  auto change = [this]() {
+    if (FirstCurrentRouteMap()) ShowRouteSettings();
+  };
   PassageDialog dialog(this, GetRouteNameForGuid(routeGuid), waypoints,
-                         choices, defaultStart);
+                         choices, defaultStart, summary, change);
   if (dialog.ShowModal() != wxID_OK) return false;
   const PassageRequest request = dialog.GetRequest();
   return CreateMultiLegConfigurationsFromRoute(routeGuid, &request);
@@ -6639,6 +6662,7 @@ void WeatherRouting::OnWeatherRouteSelected() {
   if (m_RouteSettingsDialog && m_RouteSettingsDialog->IsShown())
     m_RouteSettingsDialog->Load();
   if (m_ResultsDialog && m_ResultsDialog->IsShown()) m_ResultsDialog->Load();
+  UpdateStatusLine();
 
   UpdateDialogs();
 
@@ -11260,6 +11284,31 @@ void WeatherRouting::UpdateStates() {
     (*it)->Update(this, true);
   for (int i = 0; i < m_panel->m_lWeatherRoutes->GetItemCount(); i++)
     UpdateItem(i, true);
+  UpdateStatusLine();
+}
+
+void WeatherRouting::UpdateStatusLine() {
+  if (!m_StatusLine) return;
+  int running = 0;
+  for (WeatherRoute* w : m_WeatherRoutes)
+    if (w->routemapoverlay && RouteMapIsWaitingOrRunning(w->routemapoverlay))
+      ++running;
+  wxString text;
+  std::list<RouteMapOverlay*> selected = CurrentRouteMaps();
+  if (!selected.empty()) {
+    const RouteMapConfiguration c = selected.front()->GetConfiguration();
+    wxString boat = wxFileName(c.boatFileName).GetName();
+    if (boat.IsEmpty()) boat = _("no boat");
+    text = wxString::Format(
+        _("%s, accuracy %s, current %s"), boat,
+        weather_routing::AccuracyLabel(weather_routing::DetectAccuracy(c)),
+        c.Currents ? _("on") : _("off"));
+  } else {
+    text = _("No route selected");
+  }
+  text += wxString::Format(_(", %zu routes"), m_WeatherRoutes.size());
+  if (running) text += wxString::Format(_(", %d computing"), running);
+  if (m_StatusLine->GetLabel() != text) m_StatusLine->SetLabel(text);
 }
 
 std::list<RouteMapOverlay*> WeatherRouting::CurrentRouteMaps(

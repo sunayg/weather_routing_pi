@@ -16,15 +16,18 @@ PassageDialog::PassageDialog(
     wxWindow* parent, const wxString& route_name,
     const std::vector<RouteWaypointInfo>& waypoints,
     const std::vector<PassageMarkChoice>& avoid_choices,
-    const wxDateTime& default_start)
-    : wxDialog(parent, wxID_ANY, _("Plan passage"), wxDefaultPosition,
-               wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
-      m_avoid_choices(avoid_choices) {
+    const wxDateTime& default_start,
+    std::function<wxString()> settings_summary,
+    std::function<void()> change_settings)
+    : wxDialog(parent, wxID_ANY,
+               wxString::Format(_("Plan passage: %s"), route_name),
+               wxDefaultPosition, wxDefaultSize,
+               wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
+      m_avoid_choices(avoid_choices),
+      m_settings_summary(std::move(settings_summary)) {
   wxBoxSizer* top = new wxBoxSizer(wxVERTICAL);
 
-  top->Add(new wxStaticText(this, wxID_ANY,
-                            wxString::Format(_("Route: %s"), route_name)),
-           0, wxALL, 10);
+  top->AddSpacer(5);
 
   // --- Departure -----------------------------------------------------------
   wxStaticBoxSizer* dep =
@@ -121,18 +124,42 @@ PassageDialog::PassageDialog(
              wxALL, 5);
   top->Add(avoid, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
 
-  top->Add(new wxStaticText(
-               this, wxID_ANY,
-               _("Boat, wind and other settings are taken from the route "
-                 "currently selected in Weather Routing.")),
-           0, wxLEFT | wxRIGHT | wxBOTTOM, 10);
+  // --- Settings the legs will use --------------------------------------------
+  {
+    wxStaticBoxSizer* box =
+        new wxStaticBoxSizer(wxHORIZONTAL, this, _("Settings for every leg"));
+    m_settings = new wxStaticText(
+        this, wxID_ANY,
+        m_settings_summary ? m_settings_summary()
+                           : wxString(_("From the route selected in Weather "
+                                        "Routing.")));
+    box->Add(m_settings, 1, wxALIGN_CENTER_VERTICAL | wxALL, 5);
+    if (change_settings) {
+      wxButton* change = new wxButton(this, wxID_ANY, _("Change..."));
+      change->SetToolTip(_("Open the settings of the route selected in "
+                           "Weather Routing; the legs copy them."));
+      change->Bind(wxEVT_BUTTON,
+                   [change_settings](wxCommandEvent&) { change_settings(); });
+      box->Add(change, 0, wxALL, 5);
+    }
+    top->Add(box, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
+    // Pick up changes made in the settings window.
+    Bind(wxEVT_ACTIVATE, [this](wxActivateEvent& e) {
+      if (e.GetActive() && m_settings_summary)
+        m_settings->SetLabel(m_settings_summary());
+      e.Skip();
+    });
+  }
 
   // --- Buttons ------------------------------------------------------------------
   wxBoxSizer* buttons = new wxBoxSizer(wxHORIZONTAL);
+  m_only_create = new wxCheckBox(this, wxID_ANY, _("Only create the legs"));
+  m_only_create->SetToolTip(_("Create the legs without computing them, for "
+                              "example to change a leg first."));
+  buttons->Add(m_only_create, 0, wxALIGN_CENTER_VERTICAL | wxALL, 5);
   buttons->AddStretchSpacer();
   buttons->Add(new wxButton(this, wxID_CANCEL, _("Cancel")), 0, wxALL, 5);
-  buttons->Add(new wxButton(this, ID_CREATE, _("Create legs")), 0, wxALL, 5);
-  wxButton* go = new wxButton(this, ID_CREATE_COMPUTE, _("Create && compute"));
+  wxButton* go = new wxButton(this, ID_CREATE_COMPUTE, _("Compute passage"));
   go->SetDefault();
   buttons->Add(go, 0, wxALL, 5);
   top->Add(buttons, 0, wxEXPAND | wxALL, 5);
@@ -174,7 +201,7 @@ void PassageDialog::OnCreate(wxCommandEvent&) {
 }
 
 void PassageDialog::OnCreateAndCompute(wxCommandEvent&) {
-  m_compute_now = true;
+  m_compute_now = !(m_only_create && m_only_create->IsChecked());
   EndModal(wxID_OK);
 }
 

@@ -26,6 +26,7 @@
 #include <cstdint>
 
 #include <wx/wx.h>
+#include <wx/clipbrd.h>
 
 #include <stdlib.h>
 #include <math.h>
@@ -43,6 +44,50 @@ AboutDialog::AboutDialog(wxWindow* parent) : AboutDialogBase(parent) {
   m_stVersion->SetLabel(wxString::Format(
       _T("%d.%d.%d"), PLUGIN_VERSION_MAJOR, PLUGIN_VERSION_MINOR,
       PLUGIN_VERSION_PATCH));
+
+#ifndef __OCPN__ANDROID__
+  // Desktop (docs/ui-redesign.md, About): which build is running, and the
+  // three things people come here for.
+  SetTitle(_("About Weather Routing"));
+  m_stVersion->SetLabel(wxString::Format(
+      _("Version %d.%d.%d, sunayg fork, built %s"), PLUGIN_VERSION_MAJOR,
+      PLUGIN_VERSION_MINOR, PLUGIN_VERSION_PATCH, wxString(__DATE__)));
+  m_bAboutAuthor->Hide();
+  wxSizer* buttons = m_bClose->GetContainingSizer();
+  if (buttons) {
+    const int at = 0;
+    wxButton* manual = new wxButton(m_bClose->GetParent(), wxID_ANY, _("Manual"));
+    wxButton* report =
+        new wxButton(m_bClose->GetParent(), wxID_ANY, _("Report a problem"));
+    wxButton* copy =
+        new wxButton(m_bClose->GetParent(), wxID_ANY, _("Copy version info"));
+    buttons->Insert(at, copy, 0, wxALL, 5);
+    buttons->Insert(at, report, 0, wxALL, 5);
+    buttons->Insert(at, manual, 0, wxALL, 5);
+    manual->Bind(wxEVT_BUTTON, [](wxCommandEvent&) {
+      WR_OpenBrowser(
+          "https://opencpn-manuals.github.io/main/weather_routing/index.html");
+    });
+    report->Bind(wxEVT_BUTTON, [](wxCommandEvent&) {
+      WR_OpenBrowser("https://github.com/sunayg/weather_routing_pi/issues");
+    });
+    copy->SetToolTip(_("Copy the version, build and system to paste into a "
+                       "problem report."));
+    copy->Bind(wxEVT_BUTTON, [](wxCommandEvent&) {
+      const wxString info = wxString::Format(
+          "Weather Routing %d.%d.%d (sunayg fork), built %s %s\nOpenCPN plugin API %d.%d\n%s\n%s",
+          PLUGIN_VERSION_MAJOR, PLUGIN_VERSION_MINOR, PLUGIN_VERSION_PATCH,
+          wxString(__DATE__), wxString(__TIME__), OCPN_API_VERSION_MAJOR,
+          OCPN_API_VERSION_MINOR, wxGetOsDescription(), wxString(wxVERSION_STRING));
+      if (wxTheClipboard->Open()) {
+        wxTheClipboard->SetData(new wxTextDataObject(info));
+        wxTheClipboard->Close();
+      }
+    });
+  }
+  Layout();
+  Fit();
+#endif
 
 #ifdef __OCPN__ANDROID__
   auto* old = GetSizer();

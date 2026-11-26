@@ -58,7 +58,7 @@ Json::Value PointsJson(const std::vector<SafetyCheckWaypoint>& points) {
 
 RouteSafetyDialog::RouteSafetyDialog(weather_routing_pi& plugin,
     const wxString& route_guid, double minimum_depth_m, double land_margin_nm)
-    : wxDialog(plugin.GetParentWindow(), wxID_ANY, plugin.GetCommonName() + _(" — Check this route"),
+    : wxDialog(plugin.GetParentWindow(), wxID_ANY, _("Check route"),
                wxDefaultPosition, wxSize(860, 620), wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
       plugin_(plugin), route_guid_(route_guid), timer_(this) {
   auto* root = new wxBoxSizer(wxVERTICAL);
@@ -80,14 +80,14 @@ RouteSafetyDialog::RouteSafetyDialog(weather_routing_pi& plugin,
 #else
   auto* settings = new wxBoxSizer(wxHORIZONTAL);
 #endif
-  settings->Add(new wxStaticText(content, wxID_ANY, _("Minimum charted depth (m):")), 0,
+  settings->Add(new wxStaticText(content, wxID_ANY, _("Minimum charted depth (m)")), 0,
                 wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
   minimum_depth_ = new wxTextCtrl(content, wxID_ANY, wxString::Format("%.2f", minimum_depth_m),
                                  wxDefaultPosition, wxSize(80, -1));
   settings->Add(minimum_depth_, 0, wxRIGHT, 5);
-  settings->Add(new wxStaticText(content, wxID_ANY, _("0 = depth off")), 0,
+  settings->Add(new wxStaticText(content, wxID_ANY, _("0 skips the depth check")), 0,
                 wxALIGN_CENTER_VERTICAL | wxRIGHT, 20);
-  settings->Add(new wxStaticText(content, wxID_ANY, _("Land clearance (NM):")), 0,
+  settings->Add(new wxStaticText(content, wxID_ANY, _("Keep off land by (NM)")), 0,
                 wxALIGN_CENTER_VERTICAL | wxRIGHT, 5);
   land_margin_ = new wxTextCtrl(content, wxID_ANY, wxString::Format("%.2f", land_margin_nm),
                                wxDefaultPosition, wxSize(80, -1));
@@ -274,7 +274,7 @@ void RouteSafetyDialog::Start() {
   options.safety_margin_nm = margin;
   check_ = std::make_unique<RouteSafetyCheck>(std::move(points), options,
       weather_routing::chart_safety_host::ReviewSegment);
-  SetTitle(plugin_.GetCommonName() + _(" — Check this route: ") + route_name_);
+  SetTitle(_("Check route: ") + route_name_);
   if (auto* config = GetOCPNConfigObject()) {
     const auto old_path = config->GetPath();
     config->SetPath("/PlugIns/WeatherRouting/RouteCheck");

@@ -475,6 +475,9 @@ public:
   /** Desktop main window: toolbar, filter box and shorter menus. */
   void SetUpDesktopMainWindow();
   void FitRouteColumnsToHeaders();
+  /** Desktop: boat, accuracy and current of the selection, route count. */
+  void UpdateStatusLine();
+  wxStaticText* m_StatusLine = nullptr;
   /** Asks for an OpenCPN route, then opens Plan Passage for it. */
   void PlanPassageFromChoice();
   wxString m_RouteFilter;

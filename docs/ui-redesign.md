@@ -1,6 +1,7 @@
 # Weather Routing UI redesign
 
-Status: design agreed, not implemented. Desktop first; phone and tablet later.
+Status: desktop steps 1-8 implemented on `feature/via-mark-rules` (see
+"Implementation status" at the end). Phone and tablet (step 9) not started.
 This fork (sunayg/weather_routing_pi) does not need to stay mergeable with
 upstream.
 
@@ -155,3 +156,17 @@ Android build must stay green at every step.
 - `wxCollapsiblePane` behaviour differs between platforms. The fallback is a
   "Show more" toggle that shows and hides sizers.
 - Translations: changed labels need `po/` updates.
+
+## Implementation status (desktop)
+
+| Step | State | Notes |
+| --- | --- | --- |
+| 1 XML round trip | Done | `src/ConfigurationXml.cpp`, tests on two real files. Fixed decimal settings and mark positions losing precision. |
+| 2 Settings model | Done | `src/RouteSettingsModel.cpp`, tested. Accuracy presets: Fast = Auto 100%, Balanced = Auto 150%, Thorough = All 200% (initial values). |
+| 3 Route settings | Done | `src/RouteSettingsDialog.cpp`. Classic settings stays reachable from it. |
+| 4 Main window | Done, partly | Toolbar, filter, Name column (`src/RouteNaming.cpp`), Route menu, status line. Legs are named rows, not folded under a passage row: 167 code paths assume one route per list row. |
+| 5 Results | Done | `src/ResultsDialog.cpp`: headline, Summary with mark-rule check of the computed path, Table (leg chooser), Compare, Details. Plot, full report and engine statistics still open as their own windows. |
+| 6 Settings, Boat, Edit polar | Done, partly | Existing controls moved into compact layouts. Not on Windows (memory monitor layout) or Android. Edit polar keeps tabs with clearer names. Memory and caches are not yet one global "Auto" choice. |
+| 7 Smaller dialogs | Done, partly | Plan passage: settings summary with Change..., one Compute passage button. Batch renamed Compare variations (same pages). Route check: plainer labels only. About: version, fork, build; Manual, Report a problem, Copy version info. |
+| 8 Remove stale files | Done | `WeatherRouting.fbp`, `WeatherRoutingUI-old.cpp`, `WeatherRoutingUI-win-mem-mon.*` removed (unreferenced). |
+| 9 Phone and tablet | Not started | Android keeps its existing pages; builds only when requested. |

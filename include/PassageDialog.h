@@ -10,12 +10,15 @@
 #include <wx/dialog.h>
 #include <wx/string.h>
 
+#include <functional>
 #include <vector>
 
 #include "MarkRules.h"
 #include "RouteWaypointExtractor.h"
 
 class wxButton;
+class wxCheckBox;
+class wxStaticText;
 class wxChoice;
 class wxDatePickerCtrl;
 class wxListBox;
@@ -39,10 +42,14 @@ struct PassageMarkChoice {
 
 class PassageDialog : public wxDialog {
  public:
+  // `settings_summary` describes the settings the legs will copy (boat,
+  // accuracy, current); `change_settings` opens them for editing.
   PassageDialog(wxWindow* parent, const wxString& route_name,
                   const std::vector<RouteWaypointInfo>& waypoints,
                   const std::vector<PassageMarkChoice>& avoid_choices,
-                  const wxDateTime& default_start);
+                  const wxDateTime& default_start,
+                  std::function<wxString()> settings_summary = {},
+                  std::function<void()> change_settings = {});
 
   // Valid after ShowModal() returned wxID_OK.
   PassageRequest GetRequest() const;
@@ -64,4 +71,7 @@ class PassageDialog : public wxDialog {
   wxListBox* m_avoid_list = nullptr;
   std::vector<weather_routing::AvoidMark> m_avoid;
   bool m_compute_now = false;
+  wxCheckBox* m_only_create = nullptr;
+  wxStaticText* m_settings = nullptr;
+  std::function<wxString()> m_settings_summary;
 };
