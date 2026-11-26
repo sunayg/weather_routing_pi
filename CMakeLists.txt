@@ -290,6 +290,8 @@ SET(SRCS
             src/ConstraintChecker.cpp
             src/MarkRules.cpp
             src/PassageDialog.cpp
+            src/ConfigurationXml.cpp
+            src/RouteMapConfiguration.cpp
             src/ClimatologyThreadGuard.cpp
             src/Polar.cpp
             src/Boat.cpp

@@ -52,6 +52,9 @@ set(TEST_SRC
     RouteWaypointValidation_tests.cpp
     MarkRules_tests.cpp
     ${WEATHER_ROUTING_SOURCE_DIR}/src/MarkRules.cpp
+    ConfigurationXml_tests.cpp
+    ${WEATHER_ROUTING_SOURCE_DIR}/src/ConfigurationXml.cpp
+    ${WEATHER_ROUTING_SOURCE_DIR}/src/RouteMapConfiguration.cpp
     RoutingEndpointPreflight_tests.cpp
     ${WEATHER_ROUTING_SOURCE_DIR}/src/RouteWaypointValidation.cpp
     RouteDiagnostics_tests.cpp
@@ -166,7 +169,8 @@ set(TEST_SRC
 
    add_executable(weather_routing_pi_tests ${TEST_SRC})
    target_compile_definitions(weather_routing_pi_tests PRIVATE
-       WR_TEST_SHORELINE_DATA="${WEATHER_ROUTING_SOURCE_DIR}/data/shoreline")
+       WR_TEST_SHORELINE_DATA="${WEATHER_ROUTING_SOURCE_DIR}/data/shoreline"
+       WR_TEST_CONFIGURATION_DIR="${WEATHER_ROUTING_SOURCE_DIR}/testdata/configuration")
 
    set(WEATHER_ROUTING_TEST_SANITIZER "" CACHE STRING
        "Optional sanitizer for Weather Routing tests: address, thread, or undefined")
