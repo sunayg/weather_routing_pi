@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "WeatherRoutingMessageDialog.h"
+#include "WeatherRoutingWxCompat.h"
 #include <wx/wx.h>
 #include <wx/datectrl.h>
 #include <wx/dir.h>
@@ -16,6 +17,9 @@
 #include "BoatDialog.h"
 #include "weather_routing_pi.h"
 #include "WeatherRouting.h"
+
+// FromDIP is missing from the older wxWidgets of the Android build.
+#define WR_DIP(x) WR_FromDIP(this, (x))
 
 namespace wr = weather_routing;
 using S = wr::SettingsSection;
@@ -56,7 +60,7 @@ RouteSettingsDialog::RouteSettingsDialog(wxWindow* parent,
     : wxDialog(parent, wxID_ANY, _("Route settings"), wxDefaultPosition,
                wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER),
       m_WeatherRouting(weatherrouting) {
-  const int pad = FromDIP(5);
+  const int pad = WR_DIP(5);
   wxBoxSizer* top = new wxBoxSizer(wxVERTICAL);
 
   m_title = new wxStaticText(this, wxID_ANY, _("Route settings"));
@@ -74,14 +78,14 @@ RouteSettingsDialog::RouteSettingsDialog(wxWindow* parent,
 
   m_scroll = new wxScrolledWindow(this, wxID_ANY, wxDefaultPosition,
                                   wxDefaultSize, wxVSCROLL | wxTAB_TRAVERSAL);
-  m_scroll->SetScrollRate(0, FromDIP(12));
+  m_scroll->SetScrollRate(0, WR_DIP(12));
   wxBoxSizer* body = new wxBoxSizer(wxVERTICAL);
-  wxFlexGridSizer* grid = new wxFlexGridSizer(2, FromDIP(6), FromDIP(12));
+  wxFlexGridSizer* grid = new wxFlexGridSizer(2, WR_DIP(6), WR_DIP(12));
   grid->AddGrowableCol(1);
   auto rowLabel = [&](const wxString& text) {
     wxStaticText* t = new wxStaticText(m_scroll, wxID_ANY, text);
     t->SetFont(bold);
-    grid->Add(t, 0, wxALIGN_TOP | wxTOP, FromDIP(4));
+    grid->Add(t, 0, wxALIGN_TOP | wxTOP, WR_DIP(4));
   };
 
   // ---- Route / legs ---------------------------------------------------------
@@ -153,9 +157,9 @@ RouteSettingsDialog::RouteSettingsDialog(wxWindow* parent,
     s->Add(FieldRow(m_scroll, "time_mode"), 0, wxALIGN_CENTER_VERTICAL);
     m_date = new wxDatePickerCtrl(m_scroll, wxID_ANY);
     m_hour = new wxSpinCtrl(m_scroll, wxID_ANY, wxEmptyString, wxDefaultPosition,
-                            wxSize(FromDIP(110), -1), wxSP_ARROW_KEYS, 0, 23, 0);
+                            wxSize(WR_DIP(110), -1), wxSP_ARROW_KEYS, 0, 23, 0);
     m_minute = new wxSpinCtrl(m_scroll, wxID_ANY, wxEmptyString,
-                              wxDefaultPosition, wxSize(FromDIP(110), -1),
+                              wxDefaultPosition, wxSize(WR_DIP(110), -1),
                               wxSP_ARROW_KEYS | wxSP_WRAP, 0, 59, 0);
     m_date->SetToolTip(_("Date, in this computer's local time."));
     s->Add(m_date, 0, wxLEFT | wxALIGN_CENTER_VERTICAL, 2 * pad);
@@ -272,13 +276,13 @@ RouteSettingsDialog::RouteSettingsDialog(wxWindow* parent,
   const wxSize screen = wxGetDisplaySize();
   const wxSize content = body->GetMinSize();
   m_scroll->SetMinSize(
-      wxSize(content.x + FromDIP(24), std::min(content.y, screen.y * 85 / 100 -
-                                                              FromDIP(140))));
+      wxSize(content.x + WR_DIP(24), std::min(content.y, screen.y * 85 / 100 -
+                                                              WR_DIP(140))));
   m_scroll->FitInside();
   Fit();
-  SetSize(std::min(std::max(GetSize().x, FromDIP(600)), screen.x * 9 / 10),
+  SetSize(std::min(std::max(GetSize().x, WR_DIP(600)), screen.x * 9 / 10),
           std::min(GetSize().y, screen.y * 9 / 10));
-  SetMinSize(wxSize(FromDIP(480), FromDIP(360)));
+  SetMinSize(wxSize(WR_DIP(480), WR_DIP(360)));
   CentreOnParent();
 }
 
@@ -290,7 +294,7 @@ wxSizer* RouteSettingsDialog::FieldRow(wxWindow* parent, const std::string& id) 
   if (!f) return row;
   FieldControls fc;
   fc.field = f;
-  const int pad = FromDIP(5);
+  const int pad = WR_DIP(5);
   switch (f->kind) {
     case wr::FieldKind::Toggle:
       fc.toggle = new wxCheckBox(parent, wxID_ANY, f->label, wxDefaultPosition,
@@ -303,7 +307,7 @@ wxSizer* RouteSettingsDialog::FieldRow(wxWindow* parent, const std::string& id) 
       fc.label = new wxStaticText(parent, wxID_ANY, f->label);
       fc.number = new wxSpinCtrlDouble(parent, wxID_ANY, wxEmptyString,
                                        wxDefaultPosition,
-                                       wxSize(FromDIP(130), -1), wxSP_ARROW_KEYS,
+                                       wxSize(WR_DIP(130), -1), wxSP_ARROW_KEYS,
                                        f->min, f->max, f->min, f->step);
       fc.number->SetDigits(f->digits);
       fc.number->SetToolTip(f->tooltip);
@@ -360,9 +364,9 @@ wxPanel* RouteSettingsDialog::BuildFieldRows(wxWindow* parent, S section) {
     const bool join = kSameLine.count(f.id) && line;
     if (!join) {
       line = new wxBoxSizer(wxHORIZONTAL);
-      s->Add(line, 0, wxBOTTOM, FromDIP(4));
+      s->Add(line, 0, wxBOTTOM, WR_DIP(4));
     } else {
-      line->AddSpacer(FromDIP(14));
+      line->AddSpacer(WR_DIP(14));
     }
     line->Add(FieldRow(p, f.id), 0, wxALIGN_CENTER_VERTICAL);
   }
@@ -378,8 +382,8 @@ void RouteSettingsDialog::AddSection(wxWindow* parent, wxBoxSizer* sizer,
                             wxDefaultPosition, wxDefaultSize,
                             wxBU_LEFT | wxBORDER_NONE);
   sec.body = BuildFieldRows(parent, section);
-  sizer->Add(sec.header, 0, wxEXPAND | wxLEFT | wxRIGHT, FromDIP(10));
-  sizer->Add(sec.body, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, FromDIP(24));
+  sizer->Add(sec.header, 0, wxEXPAND | wxLEFT | wxRIGHT, WR_DIP(10));
+  sizer->Add(sec.body, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, WR_DIP(24));
   sec.body->Hide();
   m_sections[section] = sec;
   sec.header->Bind(wxEVT_BUTTON, [this, section](wxCommandEvent&) {
