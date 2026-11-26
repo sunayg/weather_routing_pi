@@ -55,6 +55,8 @@ set(TEST_SRC
     ConfigurationXml_tests.cpp
     ${WEATHER_ROUTING_SOURCE_DIR}/src/ConfigurationXml.cpp
     ${WEATHER_ROUTING_SOURCE_DIR}/src/RouteMapConfiguration.cpp
+    RouteSettingsModel_tests.cpp
+    ${WEATHER_ROUTING_SOURCE_DIR}/src/RouteSettingsModel.cpp
     RoutingEndpointPreflight_tests.cpp
     ${WEATHER_ROUTING_SOURCE_DIR}/src/RouteWaypointValidation.cpp
     RouteDiagnostics_tests.cpp

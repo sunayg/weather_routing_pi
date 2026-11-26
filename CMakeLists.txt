@@ -292,6 +292,7 @@ SET(SRCS
             src/PassageDialog.cpp
             src/ConfigurationXml.cpp
             src/RouteMapConfiguration.cpp
+            src/RouteSettingsModel.cpp
             src/ClimatologyThreadGuard.cpp
             src/Polar.cpp
             src/Boat.cpp
