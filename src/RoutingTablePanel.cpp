@@ -979,6 +979,24 @@ void RoutingTablePanel::PopulateTable() {
 
   // Get plot data from the route
   std::list<PlotData> plotData = m_RouteMap->GetPlotData(false);
+  // Plot data holds the start of each step, not the arrival: a leg sailed in
+  // one straight run (common with the native engines) showed only "Start",
+  // and the summary's arrive, duration and distance stopped one step short.
+  // Add the arrival as the last row of this copy.
+  if (!plotData.empty() && m_RouteMap->Finished() &&
+      m_RouteMap->ReachedDestination()) {
+    const wxDateTime arrival = m_RouteMap->EndTime();
+    const RouteMapConfiguration end = m_RouteMap->GetConfiguration();
+    if (arrival.IsValid() && plotData.back().time.IsValid() &&
+        arrival > plotData.back().time && std::isfinite(end.EndLat) &&
+        std::isfinite(end.EndLon)) {
+      PlotData arrive = plotData.back();
+      arrive.lat = end.EndLat;
+      arrive.lon = end.EndLon;
+      arrive.time = arrival;
+      plotData.push_back(arrive);
+    }
+  }
   UpdateSummary(plotData);
   m_gridWeatherTable->AppendRows(plotData.size());
 

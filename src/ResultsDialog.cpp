@@ -85,10 +85,10 @@ ResultsDialog::ResultsDialog(wxWindow* parent, WeatherRouting& weatherrouting)
     wxBoxSizer* s = new wxBoxSizer(wxVERTICAL);
     m_legs = new wxListCtrl(p, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                             wxLC_REPORT | wxLC_HRULES | wxLC_SINGLE_SEL);
-    const wxString cols[] = {_("Leg"),     _("Departs"), _("Arrives"),
-                             _("Distance"), _("Avg speed"), _("Wind avg / max"),
-                             _("Current avg"), _("Tacks / gybes"), _("Comfort"),
-                             _("Mark rules")};
+    const wxString cols[] = {_("Leg"),       _("Departs"),     _("Arrives"),
+                             _("Distance"),  _("Mark rules"),  _("Avg speed"),
+                             _("Wind avg / max"), _("Current avg"),
+                             _("Tacks / gybes"), _("Comfort")};
     for (unsigned i = 0; i < WXSIZEOF(cols); ++i) m_legs->InsertColumn(i, cols[i]);
     s->Add(m_legs, 1, wxEXPAND | wxALL, pad);
     m_notes = new wxTextCtrl(p, wxID_ANY, wxEmptyString, wxDefaultPosition,
@@ -264,19 +264,23 @@ void ResultsDialog::LoadSummary(const std::vector<RouteMapOverlay*>& routes) {
                                 : wxString::Format(_T("%.2f %s"),
                                                    toUsrDistance_Plugin(legNm),
                                                    getUsrDistanceUnit_Plugin()));
-    m_legs->SetItem(row, 4, w->AvgSpeed);
-    m_legs->SetItem(row, 5, w->AvgWind + _T(" / ") + w->MaxWind);
-    m_legs->SetItem(row, 6, w->AvgCurrent);
-    m_legs->SetItem(row, 7, w->Tacks + _T(" / ") + w->Jibes);
-    m_legs->SetItem(row, 8, w->Comfort);
+    m_legs->SetItem(row, 5, w->AvgSpeed);
+    m_legs->SetItem(row, 6, w->AvgWind + _T(" / ") + w->MaxWind);
+    m_legs->SetItem(row, 7, w->AvgCurrent);
+    m_legs->SetItem(row, 8, w->Tacks + _T(" / ") + w->Jibes);
+    m_legs->SetItem(row, 9, w->Comfort);
 
     // Mark rules: check the computed path, not just the settings.
     wxString rules;
     if (!c.MarkRules.empty()) {
       std::vector<std::pair<double, double>> path;
-      if (r->ReachedDestination())
+      if (r->ReachedDestination()) {
+        // Step starts plus the arrival (plot data stops one step short).
         for (const PlotData& p : r->GetPlotData(false))
           path.push_back({p.lat, p.lon});
+        if (!path.empty() && std::isfinite(c.EndLat) && std::isfinite(c.EndLon))
+          path.push_back({c.EndLat, c.EndLon});
+      }
       for (const wr::MarkRule& rule : c.MarkRules) {
         const wxString mark = wr::NameForPoint(rule.lat, rule.lon, points);
         if (!rules.IsEmpty()) rules += _T("; ");
@@ -293,7 +297,7 @@ void ResultsDialog::LoadSummary(const std::vector<RouteMapOverlay*>& routes) {
                                   pass.ok ? _("OK") : _("BROKEN"));
       }
     }
-    m_legs->SetItem(row, 9, rules);
+    m_legs->SetItem(row, 4, rules);
     if (!w->WeatherSourceDetail.IsEmpty())
       notes += wxString::Format(_("%s: %s\n"),
                                 routes.size() > 1
