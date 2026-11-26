@@ -5887,6 +5887,14 @@ void WeatherRouting::FitRouteColumnsToHeaders() {
         list->GetTextExtent(item.GetText()).x + WR_FromDIP(list, 20);
     if (list->GetColumnWidth(col) < header) list->SetColumnWidth(col, header);
   }
+  // A long name must not push the times, distance and state off screen; the
+  // list shortens what does not fit with an ellipsis.
+  if (columns[NAME] >= 0) {
+    const int cap = std::max(WR_FromDIP(list, 280),
+                             list->GetClientSize().x * 45 / 100);
+    if (list->GetColumnWidth(columns[NAME]) > cap)
+      list->SetColumnWidth(columns[NAME], cap);
+  }
 }
 
 static void SetInspectorLabel(wxStaticText* label, const wxString& value) {

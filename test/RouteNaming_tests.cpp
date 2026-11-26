@@ -60,8 +60,9 @@ TEST(RouteNaming, LegsNameTheirPassageAndShortenPassingPoints) {
   c.MultiLegLegIndex = 1;
   c.MultiLegLegCount = 2;
   EXPECT_EQ(wr::DescribeRoute(c, kPoints),
-            "Race test: Dolphin - Green Mark - Red Buoy, leg 1 of 2: Dolphin to "
-            "pass Green Mark (stbd)");
+            wxString::FromUTF8("Leg 1 of 2: Dolphin to pass Green Mark (stbd) "
+                               "\u00B7 Race test: Dolphin - Green Mark - Red "
+                               "Buoy"));
 }
 
 TEST(RouteNaming, TriedDepartureShowsItsOffset) {

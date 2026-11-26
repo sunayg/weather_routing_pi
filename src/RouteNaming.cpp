@@ -79,10 +79,13 @@ wxString DescribeRoute(const RouteMapConfiguration& route,
   const wxString end = ShortPointName(route.End, passage);
 
   if (route.IsMultiLegGenerated && route.MultiLegLegIndex > 0) {
-    return wxString::Format(_("%s, leg %d of %d: %s to %s"),
-                            passage.IsEmpty() ? wxString(_("Passage")) : passage,
-                            route.MultiLegLegIndex, route.MultiLegLegCount,
-                            start, end);
+    // The leg comes first: a narrow column trims the passage name, not the
+    // part that tells legs apart.
+    wxString name = wxString::Format(_("Leg %d of %d: %s to %s"),
+                                     route.MultiLegLegIndex,
+                                     route.MultiLegLegCount, start, end);
+    if (!passage.IsEmpty()) name += wxString::FromUTF8(" \u00B7 ") + passage;
+    return name;
   }
 
   wxString name = wxString::Format(_("%s to %s"), start, end);
