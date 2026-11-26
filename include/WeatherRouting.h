@@ -105,6 +105,9 @@ public:
   /** Path to the boat characteristics file used for this route. */
   wxString BoatFilename;
 
+  /** Plain-language name for the routes list (RouteNaming). */
+  wxString Name;
+
   /** Starting position name/coordinates. */
   wxString Start;
 
@@ -245,6 +248,7 @@ public:
 
   enum {
     VISIBLE = 0,        //!< Route visibility toggle state
+    NAME,               //!< Plain-language route name (RouteNaming)
     BOAT,               //!< Boat configuration file name
     START_TYPE,         //!< Starting position type (boat or named)
     START,              //!< Starting position name/coordinates
@@ -458,6 +462,11 @@ public:
   /** Opens the single-page route settings dialog for the selected routes
    * (desktop). */
   void ShowRouteSettings();
+  /** Desktop main window: toolbar, filter box and shorter menus. */
+  void SetUpDesktopMainWindow();
+  /** Asks for an OpenCPN route, then opens Plan Passage for it. */
+  void PlanPassageFromChoice();
+  wxString m_RouteFilter;
   class RouteSettingsDialog* m_RouteSettingsDialog = nullptr;
   bool ComputeMultiLegSequence(RouteMapOverlay* selectedRoute);
   bool EditMultiLegGroupSettings(RouteMapOverlay* selectedRoute);

@@ -64,6 +64,7 @@
 #include "PassageDialog.h"
 #include "ConfigurationXml.h"
 #include "RouteSettingsDialog.h"
+#include "RouteNaming.h"
 #include "RouteWaypointExtractor.h"
 #include "RouteWaypointValidation.h"
 #include "RoutingEndpointPreflight.h"
@@ -1194,6 +1195,7 @@ WeatherRoute::WeatherRoute() : routemapoverlay(new RouteMapOverlay) {}
 WeatherRoute::~WeatherRoute() { delete routemapoverlay; }
 
 const wxString WeatherRouting::column_names[NUM_COLS] = {_("Visible"),
+                                                          _("Name"),
                                                          _("Boat"),
                                                          _("Start Type"),
                                                          _("Start"),
@@ -1515,6 +1517,7 @@ WeatherRouting::WeatherRouting(wxWindow* parent, weather_routing_pi& plugin)
 #endif
   }
 #ifndef __OCPN__ANDROID__
+  SetUpDesktopMainWindow();
   bSizer->SetSizeHints(this);
 #endif
 
@@ -2337,10 +2340,10 @@ bool WeatherRouting::CreateMultiLegConfigurationsFromRoute(
         const double lat = passagePlan[i].end_lat, lon = passagePlan[i].end_lon;
         const bool port =
             passage->via[i].side == weather_routing::MarkSide::LeaveToPort;
-        passName[i + 1] = wxString::Format(
-            _T("%s: pass %s %s %s"), routeName, waypoints[i + 1].name,
-            port ? _T("(port)") : _T("(stbd)"),
-            wxDateTime::Now().Format(_T("%H%M%S")));
+        std::vector<wxString> taken;
+        for (const auto& p : RouteMap::Positions) taken.push_back(p.Name);
+        passName[i + 1] = weather_routing::PassingPointName(
+            waypoints[i + 1].name, port, taken);
         AddPosition(lat, lon, passName[i + 1]);
       }
     }
@@ -2435,6 +2438,123 @@ bool WeatherRouting::CreateMultiLegConfigurationsFromRoute(
   BeginMultiLegGroupSettingsEdit(groupId);
   m_tAutoSaveXML.Start(5000, true);
   return true;
+}
+
+void WeatherRouting::SetUpDesktopMainWindow() {
+  // ---- Toolbar and filter above the routes list ------------------------------
+  wxListCtrl* list = m_panel->m_lWeatherRoutes;
+  wxWindow* parent = list->GetParent();
+  auto* grid = dynamic_cast<wxFlexGridSizer*>(list->GetContainingSizer());
+  if (grid) {
+    wxBoxSizer* bar = new wxBoxSizer(wxHORIZONTAL);
+    auto button = [&](const wxString& label, const wxString& tip) {
+      wxButton* b = new wxButton(parent, wxID_ANY, label, wxDefaultPosition,
+                                 wxDefaultSize, wxBU_EXACTFIT);
+      b->SetToolTip(tip);
+      bar->Add(b, 0, wxRIGHT | wxALIGN_CENTER_VERTICAL, 4);
+      return b;
+    };
+    wxButton* plan = button(_("Plan passage"),
+                            _("Route through the marks of an OpenCPN route, "
+                              "with sides and clearances."));
+    wxFont bold = plan->GetFont();
+    bold.SetWeight(wxFONTWEIGHT_BOLD);
+    plan->SetFont(bold);
+    wxButton* add = button(_("New route"), _("Add a route from start to end."));
+    wxButton* compute = button(_("Compute"), _("Compute the selected routes."));
+    wxButton* more = button(wxString::FromUTF8("▾"),
+                            _("More compute options"));
+    wxButton* stop = button(_("Stop"), _("Stop computing."));
+    wxButton* results = button(_("Results"),
+                               _("Details and report for the selected route."));
+    wxButton* settings = button(_("Settings"),
+                                _("Chart display, columns and computer "
+                                  "settings."));
+    bar->AddStretchSpacer();
+    wxTextCtrl* filter = new wxTextCtrl(parent, wxID_ANY, wxEmptyString,
+                                        wxDefaultPosition,
+                                        wxSize(WR_FromDIP(this, 180), -1));
+    filter->SetHint(_("Filter routes"));
+    filter->SetToolTip(_("Show only routes whose name, boat, start, end or "
+                         "date contain every word typed."));
+    bar->Add(filter, 0, wxALIGN_CENTER_VERTICAL);
+
+    plan->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { PlanPassageFromChoice(); });
+    add->Bind(wxEVT_BUTTON, [this](wxCommandEvent& e) { OnNew(e); });
+    compute->Bind(wxEVT_BUTTON, [this](wxCommandEvent& e) { OnCompute(e); });
+    more->Bind(wxEVT_BUTTON, [this, more](wxCommandEvent&) {
+      wxMenu menu;
+      const int all = wxWindow::NewControlId();
+      menu.Append(all, _("Compute all"));
+      menu.Bind(wxEVT_MENU, [this](wxCommandEvent& e) { OnComputeAll(e); }, all);
+      more->PopupMenu(&menu, 0, more->GetSize().y);
+    });
+    stop->Bind(wxEVT_BUTTON, [this](wxCommandEvent& e) { OnStop(e); });
+    results->Bind(wxEVT_BUTTON, [this](wxCommandEvent& e) { OnReport(e); });
+    settings->Bind(wxEVT_BUTTON, [this](wxCommandEvent& e) { OnSettings(e); });
+    filter->Bind(wxEVT_TEXT, [this, filter](wxCommandEvent&) {
+      m_RouteFilter = filter->GetValue().Trim().Trim(false);
+      RebuildList();
+    });
+
+    // The list moves from row 0 to row 1; the old button row keeps only its
+    // progress bar (every button is on the toolbar or the row's menu).
+    grid->SetRows(grid->GetRows() + 1);
+    grid->Insert(0, bar, 0, wxEXPAND | wxLEFT | wxRIGHT | wxTOP, 5);
+    if (grid->IsRowGrowable(0)) grid->RemoveGrowableRow(0);
+    grid->AddGrowableRow(1);
+    for (wxWindow* w : std::initializer_list<wxWindow*>{
+             m_panel->m_bCompute, m_panel->m_bSaveAsTrack,
+             m_panel->m_bSimplifyRoute, m_panel->m_bSaveAsRoute,
+             m_panel->m_bExportRoute})
+      if (w) w->Hide();
+  }
+
+  // ---- Menus: File, Route, View, Help ----------------------------------------
+  wxMenuBar* bar = m_menubar3;
+  if (bar) {
+    const int position = bar->FindMenu(_("&Position"));
+    const int routings = bar->FindMenu(_("&Routings"));
+    if (routings != wxNOT_FOUND) {
+      bar->SetMenuLabel(routings, _("&Route"));
+      wxMenu* route = bar->GetMenu(routings);
+      const int planId = wxWindow::NewControlId();
+      route->Insert(0, planId, _("&Plan passage...\tCtrl+P"),
+                    _("Route through the marks of an OpenCPN route"));
+      route->InsertSeparator(1);
+      Bind(wxEVT_MENU, [this](wxCommandEvent&) { PlanPassageFromChoice(); },
+           planId);
+      if (position != wxNOT_FOUND) {
+        wxMenu* positions = bar->Remove(position);
+        route->AppendSeparator();
+        route->AppendSubMenu(positions, _("Positions"));
+      }
+    }
+  }
+  m_panel->Layout();
+}
+
+void WeatherRouting::PlanPassageFromChoice() {
+  wxArrayString guids = GetRouteGUIDArray();
+  wxArrayString names;
+  wxArrayString keep;
+  for (size_t i = 0; i < guids.GetCount(); ++i) {
+    std::unique_ptr<PlugIn_Route> r = GetRoute_Plugin(guids[i]);
+    if (!r || !r->pWaypointList || r->pWaypointList->GetCount() < 2) continue;
+    names.Add(r->m_NameString.IsEmpty() ? wxString(_("(unnamed route)"))
+                                        : r->m_NameString);
+    keep.Add(guids[i]);
+  }
+  if (keep.IsEmpty()) {
+    WR_MessageBox(_("Draw a route in OpenCPN first: start, the marks to pass, "
+                    "then the finish."),
+                  _("Plan passage"), wxOK | wxICON_INFORMATION, this);
+    return;
+  }
+  wxSingleChoiceDialog pick(this, _("Which OpenCPN route?"), _("Plan passage"),
+                            names);
+  if (pick.ShowModal() != wxID_OK) return;
+  ShowPassageDialog(keep[pick.GetSelection()]);
 }
 
 void WeatherRouting::ShowRouteSettings() {
@@ -10612,6 +10732,12 @@ void WeatherRoute::Update(WeatherRouting* wr, bool stateonly) {
     RouteMapConfiguration configuration = routemapoverlay->GetConfiguration();
 
     BoatFilename = configuration.boatFileName;
+    {
+      std::vector<weather_routing::NamedPoint> points;
+      for (const auto& p : RouteMap::Positions)
+        points.push_back({p.Name, p.lat, p.lon});
+      Name = weather_routing::DescribeRoute(configuration, points);
+    }
     // Add handling for Start field based on StartType
     if (configuration.StartType == RouteMapConfiguration::START_FROM_BOAT) {
       Start = _("Boat");
@@ -10796,6 +10922,12 @@ void WeatherRouting::UpdateItem(long index, bool stateonly) {
       m_panel->m_lWeatherRoutes->SetItemImage(
           index, weatherroute->routemapoverlay->m_bEndRouteVisible ? 0 : -1);
       m_panel->m_lWeatherRoutes->SetColumnWidth(columns[VISIBLE], 28);
+    }
+
+    if (columns[NAME] >= 0) {
+      m_panel->m_lWeatherRoutes->SetItem(index, columns[NAME],
+                                         weatherroute->Name);
+      m_panel->m_lWeatherRoutes->SetColumnWidth(columns[NAME], wxLIST_AUTOSIZE);
     }
 
     if (columns[BOAT] >= 0) {
@@ -11093,6 +11225,13 @@ void WeatherRouting::RebuildList() {
        it != m_WeatherRoutes.end(); it++) {
     if (!(*it)->Filtered) {
       (*it)->Update(this);
+      if (!m_RouteFilter.IsEmpty() &&
+          !weather_routing::MatchesFilter(
+              (*it)->Name + _T(" ") + wxFileName((*it)->BoatFilename).GetName() +
+                  _T(" ") + (*it)->Start + _T(" ") + (*it)->End + _T(" ") +
+                  (*it)->StartTime,
+              m_RouteFilter))
+        continue;
       wxListItem item;
       item.SetId(m_panel->m_lWeatherRoutes->GetItemCount());
       item.SetData(*it);

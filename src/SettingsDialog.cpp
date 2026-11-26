@@ -505,21 +505,30 @@ void SettingsDialog::LoadSettings() {
   m_sParallelMethods->SetValue(std::clamp(parallelLimit, 2, 6));
   m_sParallelMethods->Enable(parallelMethods);
 
-  // Set defaults
+  // Defaults (docs/ui-redesign.md): name, departs, arrives, distance, state.
   bool columns[WeatherRouting::NUM_COLS];
   for (int i = 0; i < WeatherRouting::NUM_COLS; i++)
-    columns[i] = i != WeatherRouting::BOAT &&
-                 (i <= WeatherRouting::DISTANCE ||
-                  i == WeatherRouting::WEATHER_SOURCE ||
-                  i == WeatherRouting::STATE);
+    columns[i] = i == WeatherRouting::VISIBLE || i == WeatherRouting::NAME ||
+                 i == WeatherRouting::STARTTIME ||
+                 i == WeatherRouting::ENDTIME ||
+                 i == WeatherRouting::DISTANCE || i == WeatherRouting::STATE;
+#ifndef __OCPN__ANDROID__
+  // Layout 2 introduced the Name column and the shorter default set; apply it
+  // once, after which the user's own choice is kept.
+  const bool newColumnLayout = pConf->Read(_T("ColumnLayout"), 0L) < 2;
+  if (newColumnLayout) pConf->Write(_T("ColumnLayout"), 2L);
+#else
+  const bool newColumnLayout = false;
+#endif
 
   for (int i = 0; i < WeatherRouting::NUM_COLS; i++) {
     if (i == 0)
       m_cblFields->Append(_("Visible"));
     else
       m_cblFields->Append(_(column_names[i]));
-    pConf->Read(wxString::Format(_T("Column_") + _(column_names[i]), i),
-                &columns[i], columns[i]);
+    if (!newColumnLayout)
+      pConf->Read(wxString::Format(_T("Column_") + _(column_names[i]), i),
+                  &columns[i], columns[i]);
     m_cblFields->Check(i, columns[i]);
   }
 
