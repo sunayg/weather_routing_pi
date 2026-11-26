@@ -150,6 +150,10 @@ void ReadConfigurationXml(TiXmlElement* e, RouteMapConfiguration& configuration,
       AttributeDouble(e, "MaxTrueWindKnots", 50);
   configuration.MaxApparentWindKnots =
       AttributeDouble(e, "MaxApparentWindKnots", 50);
+  configuration.MaxUpwindTrueWindKnots =
+      std::max(0.0, AttributeDouble(e, "MaxUpwindTrueWindKnots", 0));
+  configuration.MinTrueWindKnots =
+      std::max(0.0, AttributeDouble(e, "MinTrueWindKnots", 0));
 
   configuration.RequireWaveCoverage = AttributeBool(e, "RequireWaveCoverage", false);
   configuration.MaxSwellMeters =
@@ -316,6 +320,12 @@ void WriteConfigurationXml(const RouteMapConfiguration& configuration,
   c->SetDoubleAttribute("MaxSearchAngle", configuration.MaxSearchAngle);
   c->SetDoubleAttribute("MaxTrueWindKnots", configuration.MaxTrueWindKnots);
   c->SetDoubleAttribute("MaxApparentWindKnots", configuration.MaxApparentWindKnots);
+  // Written only when set, so files from earlier versions stay unchanged.
+  if (configuration.MaxUpwindTrueWindKnots > 0)
+    c->SetDoubleAttribute("MaxUpwindTrueWindKnots",
+                          configuration.MaxUpwindTrueWindKnots);
+  if (configuration.MinTrueWindKnots > 0)
+    c->SetDoubleAttribute("MinTrueWindKnots", configuration.MinTrueWindKnots);
 
   c->SetDoubleAttribute("MaxSwellMeters", configuration.MaxSwellMeters);
   c->SetAttribute("RequireWaveCoverage", configuration.RequireWaveCoverage);

@@ -128,6 +128,14 @@ std::vector<SettingsField> BuildFields() {
   f.push_back(Number("max_waves", S::Limits, _("Max waves"), _("m"),
                      _("Do not sail in higher waves than this."),
                      &C::MaxSwellMeters, 0, 20, 0.5, 1));
+  f.push_back(Number("max_wind_upwind", S::Limits, _("Upwind max"), _("kn"),
+                     _("Do not sail closer than 90 degrees to the wind in more "
+                       "than this. 0 = no separate upwind limit."),
+                     &C::MaxUpwindTrueWindKnots, 0, 100, 1, 0));
+  f.push_back(Number("min_wind", S::Limits, _("Min wind"), _("kn"),
+                     _("Do not sail in less wind than this: motor if motoring "
+                       "is on, otherwise avoid the area. 0 = off."),
+                     &C::MinTrueWindKnots, 0, 20, 0.5, 1));
 
   // ---- Safety --------------------------------------------------------------
   f.push_back(Toggle("avoid_land", S::Safety, _("Avoid land"),

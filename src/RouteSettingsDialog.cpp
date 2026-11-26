@@ -348,6 +348,7 @@ wxPanel* RouteSettingsDialog::BuildFieldRows(wxWindow* parent, S section) {
   // Fields that share a line in the design.
   static const std::map<std::string, std::string> kSameLine = {
       {"currents", "use_grib"},          {"max_waves", "max_true_wind"},
+      {"min_wind", "max_wind_upwind"},
       {"land_margin", "avoid_land"},     {"min_depth", "use_chart_depths"},
       {"motor_below", "use_motor"},      {"motor_speed", "use_motor"},
       {"departure_step", "departure_range"},
@@ -618,6 +619,29 @@ void RouteSettingsDialog::UpdateEnabledState() {
                it->second.number, it->second.label, it->second.unit})
         if (w) w->Enable(manual);
     }
+  }
+  // Charted depth needs an OpenCPN build with the chart-safety service;
+  // standard OpenCPN cannot check it and routing refuses to start. Keep the
+  // tick box usable only to switch an old setting off.
+  if (!m_WeatherRouting.HasEnhancedChartSafety()) {
+    auto tick = m_fields.find("use_chart_depths");
+    auto depth = m_fields.find("min_depth");
+    const wxString why =
+        _("Needs an OpenCPN build with the chart-safety service. This "
+          "OpenCPN cannot check charted depth, and a route with a minimum "
+          "depth will not start.");
+    if (tick != m_fields.end() && tick->second.toggle) {
+      tick->second.toggle->Enable(tick->second.toggle->Get3StateValue() !=
+                                  wxCHK_UNCHECKED);
+      tick->second.toggle->SetToolTip(why);
+    }
+    if (depth != m_fields.end())
+      for (wxWindow* w : std::initializer_list<wxWindow*>{
+               depth->second.number, depth->second.label, depth->second.unit})
+        if (w) {
+          w->Enable(false);
+          w->SetToolTip(why);
+        }
   }
   auto leaveNow = m_fields.find("use_current_time");
   const bool timed = leaveNow == m_fields.end() || !leaveNow->second.toggle ||

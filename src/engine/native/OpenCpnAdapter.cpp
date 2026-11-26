@@ -30,6 +30,7 @@
 #include "RoutingQualityPolicy.h"
 #include "RoutingResourcePolicy.h"
 #include "SunCalculator.h"
+#include "WindLimits.h"
 #include "SystemMemory.h"
 #include "CalculationHelperPolicy.h"
 #include "WeatherDataProvider.h"
@@ -750,6 +751,12 @@ private:
     if (index >= configuration_.boat.Polars.size()) return result;
     PolarSpeedStatus status = POLAR_SPEED_SUCCESS;
     bool estimated = false;
+    // Wind limits: no sailing upwind in too much wind, or in too little.
+    // With motoring on, candidatesAt then offers the motor instead.
+    if (!weather_routing::SailingAllowedByWindLimits(
+            tws, twa, configuration_.MaxUpwindTrueWindKnots,
+            configuration_.MinTrueWindKnots))
+      return result;
     double speed = PolarSpeedForRouting(configuration_.boat.Polars, index,
         twa, tws, &status,
         configuration_.OptimizeTacking && !configuration_.IsOriginal(),

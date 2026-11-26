@@ -463,6 +463,14 @@ struct RouteMapConfiguration {
    */
   double MaxApparentWindKnots;
 
+  /** Maximum true wind for sailing upwind (true wind angle under 90
+   * degrees), knots; 0 = no separate limit. See WindLimits.h. */
+  double MaxUpwindTrueWindKnots = 0;
+
+  /** Minimum true wind for sailing, knots; below it the boat motors (if
+   * motoring is on) or the route avoids the area. 0 = off. */
+  double MinTrueWindKnots = 0;
+
   /**
    * Maximum significant wave height (combined wind sea and swell), meters.
    * Applied to known and bounded local estimated heights. Unknown coverage

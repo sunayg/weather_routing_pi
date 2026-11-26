@@ -55,7 +55,7 @@ TEST(RouteSettingsModel, FieldIdsAreUniqueAndComplete) {
         "anchoring", "shoreline_detail", "engine", "adaptive", "time_step",
         "heading_step", "effort", "search_angle", "course_from", "course_to",
         "optimal_angles", "max_off_course", "max_course_angle", "integrator",
-        "wind_vs_current", "recover_approach"})
+        "wind_vs_current", "recover_approach", "max_wind_upwind", "min_wind"})
     EXPECT_NE(wr::FindSettingsField(id), nullptr) << id;
 }
 
@@ -184,4 +184,40 @@ TEST(RouteSettingsModel, LegDeparturesChainFromArrivals) {
   EXPECT_EQ(d[2], wxDateTime(28, wxDateTime::Nov, 2026, 17, 11, 9));
   EXPECT_TRUE(d[3].IsValid() == false);  // leg 3 not computed yet
   EXPECT_TRUE(wr::ChainLegDepartures(start, {}).empty());
+}
+
+#include "WindLimits.h"
+
+TEST(WindLimits, UpwindLimitAppliesOnlyCloserThanNinetyDegrees) {
+  EXPECT_FALSE(wr::SailingAllowedByWindLimits(24, 45, 20, 0));
+  EXPECT_FALSE(wr::SailingAllowedByWindLimits(24, -45, 20, 0));
+  EXPECT_TRUE(wr::SailingAllowedByWindLimits(24, 120, 20, 0));
+  EXPECT_TRUE(wr::SailingAllowedByWindLimits(18, 45, 20, 0));
+  EXPECT_TRUE(wr::SailingAllowedByWindLimits(40, 45, 0, 0));  // off
+}
+TEST(WindLimits, MinimumWindAppliesAtEveryAngle) {
+  EXPECT_FALSE(wr::SailingAllowedByWindLimits(3, 150, 0, 4));
+  EXPECT_FALSE(wr::SailingAllowedByWindLimits(3, 40, 0, 4));
+  EXPECT_TRUE(wr::SailingAllowedByWindLimits(5, 40, 0, 4));
+  EXPECT_TRUE(wr::SailingAllowedByWindLimits(0.5, 40, 0, 0));  // off
+}
+TEST(WindLimits, MissingWindIsLeftToTheDataChecks) {
+  EXPECT_TRUE(wr::SailingAllowedByWindLimits(NAN, 40, 20, 4));
+}
+TEST(WindLimits, SavedOnlyWhenSetAndReadBack) {
+  RouteMapConfiguration c = Defaults();
+  TiXmlElement plain("Configuration");
+  wr::WriteConfigurationXml(c, &plain);
+  EXPECT_EQ(plain.Attribute("MaxUpwindTrueWindKnots"), nullptr);
+  EXPECT_EQ(plain.Attribute("MinTrueWindKnots"), nullptr);
+  c.MaxUpwindTrueWindKnots = 22;
+  c.MinTrueWindKnots = 3.5;
+  TiXmlElement out("Configuration");
+  wr::WriteConfigurationXml(c, &out);
+  RouteMapConfiguration back;
+  wr::ConfigurationXmlReadOptions o;
+  o.resolve_boat = [](const wxString& n) { return n; };
+  wr::ReadConfigurationXml(&out, back, o);
+  EXPECT_DOUBLE_EQ(back.MaxUpwindTrueWindKnots, 22);
+  EXPECT_DOUBLE_EQ(back.MinTrueWindKnots, 3.5);
 }

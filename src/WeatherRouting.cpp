@@ -14188,6 +14188,8 @@ void WeatherRouting::SaveLastUsedConfigurationDefaults(
   pConf->Write(_T("MaxSearchAngle"), configuration.MaxSearchAngle);
   pConf->Write(_T("MaxTrueWindKnots"), configuration.MaxTrueWindKnots);
   pConf->Write(_T("MaxApparentWindKnots"), configuration.MaxApparentWindKnots);
+  pConf->Write(_T("MaxUpwindTrueWindKnots"), configuration.MaxUpwindTrueWindKnots);
+  pConf->Write(_T("MinTrueWindKnots"), configuration.MinTrueWindKnots);
   pConf->Write(_T("MaxSwellMeters"), configuration.MaxSwellMeters);
   pConf->Write(_T("RequireWaveCoverage"), configuration.RequireWaveCoverage);
   pConf->Write(_T("MaxLatitude"), configuration.MaxLatitude);
@@ -14278,6 +14280,11 @@ void WeatherRouting::ApplyLastUsedConfigurationDefaults(
               configuration.MaxTrueWindKnots);
   pConf->Read(_T("MaxApparentWindKnots"), &configuration.MaxApparentWindKnots,
               configuration.MaxApparentWindKnots);
+  pConf->Read(_T("MaxUpwindTrueWindKnots"),
+              &configuration.MaxUpwindTrueWindKnots,
+              configuration.MaxUpwindTrueWindKnots);
+  pConf->Read(_T("MinTrueWindKnots"), &configuration.MinTrueWindKnots,
+              configuration.MinTrueWindKnots);
   pConf->Read(_T("RequireWaveCoverage"), &configuration.RequireWaveCoverage, false);
   pConf->Read(_T("MaxSwellMeters"), &configuration.MaxSwellMeters,
               configuration.MaxSwellMeters);
