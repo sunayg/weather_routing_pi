@@ -263,10 +263,8 @@ RouteSettingsDialog::RouteSettingsDialog(wxWindow* parent,
     m_WeatherRouting.m_ConfigurationDialog.Show();
     m_WeatherRouting.m_ConfigurationDialog.Raise();
   });
-  compute->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) {
-    wxCommandEvent event;
-    m_WeatherRouting.OnCompute(event);
-  });
+  compute->Bind(wxEVT_BUTTON,
+                [this](wxCommandEvent&) { m_WeatherRouting.ComputeSelection(); });
   close->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { Hide(); });
   Bind(wxEVT_CLOSE_WINDOW, [this](wxCloseEvent&) { Hide(); });
 

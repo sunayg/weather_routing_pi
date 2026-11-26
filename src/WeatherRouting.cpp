@@ -2487,7 +2487,7 @@ void WeatherRouting::SetUpDesktopMainWindow() {
 
     plan->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { PlanPassageFromChoice(); });
     add->Bind(wxEVT_BUTTON, [this](wxCommandEvent& e) { OnNew(e); });
-    compute->Bind(wxEVT_BUTTON, [this](wxCommandEvent& e) { OnCompute(e); });
+    compute->Bind(wxEVT_BUTTON, [this](wxCommandEvent&) { ComputeSelection(); });
     more->Bind(wxEVT_BUTTON, [this, more](wxCommandEvent&) {
       wxMenu menu;
       const int all = wxWindow::NewControlId();
@@ -2576,6 +2576,20 @@ std::vector<RouteMapOverlay*> WeatherRouting::SelectedRoutesOrPassage() {
   }
   std::vector<RouteMapOverlay*> legs = GetMultiLegGroupRoutes(first.MultiLegGroupId);
   return legs.empty() ? out : legs;
+}
+
+void WeatherRouting::ComputeSelection() {
+  std::vector<RouteMapOverlay*> routes = SelectedRoutesOrPassage();
+  if (!routes.empty()) {
+    const RouteMapConfiguration first = routes.front()->GetConfiguration();
+    if (first.IsMultiLegGenerated && !first.MultiLegGroupId.IsEmpty() &&
+        static_cast<int>(routes.size()) == first.MultiLegLegCount) {
+      ComputeMultiLegSequence(routes.front());
+      return;
+    }
+  }
+  wxCommandEvent event;
+  OnCompute(event);
 }
 
 void WeatherRouting::ShowResults() {

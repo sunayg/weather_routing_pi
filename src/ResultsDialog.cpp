@@ -22,13 +22,10 @@
 namespace wr = weather_routing;
 
 namespace {
-// "6.73 NMi" -> 6.73; anything unparsable -> NAN.
-double LeadingNumber(const wxString& s) {
-  double v = NAN;
-  wxString first = s.BeforeFirst(' ');
-  first.Replace(_T(","), _T("."));
-  if (!first.ToCDouble(&v)) return NAN;
-  return v;
+// Route distance in nautical miles, or NAN until the route reaches its end.
+double RouteDistanceNm(RouteMapOverlay* r) {
+  if (!r || !r->ReachedDestination()) return NAN;
+  return r->RouteInfo(RouteMapOverlay::DISTANCE);
 }
 
 wxString FormatSpan(const wxTimeSpan& span) {
@@ -119,7 +116,8 @@ ResultsDialog::ResultsDialog(wxWindow* parent, WeatherRouting& weatherrouting)
     m_compare = new wxListCtrl(p, wxID_ANY, wxDefaultPosition, wxDefaultSize,
                                wxLC_REPORT | wxLC_HRULES | wxLC_SINGLE_SEL);
     const wxString cols[] = {_("Route"), _("Arrives"), _("Extra"),
-                             _("Distance"), _("Comfort"), _("State")};
+                             _("Distance (") + getUsrDistanceUnit_Plugin() + _T(")"),
+                             _("Comfort"), _("State")};
     for (unsigned i = 0; i < WXSIZEOF(cols); ++i)
       m_compare->InsertColumn(i, cols[i]);
     m_compare->SetToolTip(_("Double-click a route to select it in the list."));
@@ -217,8 +215,7 @@ void ResultsDialog::Load() {
   double distance = 0;
   bool distanceKnown = true;
   for (RouteMapOverlay* r : routes) {
-    WeatherRoute* w = RowFor(r);
-    const double d = w ? LeadingNumber(w->Distance) : NAN;
+    const double d = RouteDistanceNm(r);
     if (std::isnan(d)) distanceKnown = false;
     else distance += d;
   }
@@ -228,12 +225,14 @@ void ResultsDialog::Load() {
                      routes.back()->ReachedDestination();
   m_elapsed->SetLabel(timed ? FormatSpan(end - start) : _("N/A"));
   m_distance->SetLabel(distanceKnown
-                           ? wxString::Format(_T("%.2f %s"), distance,
+                           ? wxString::Format(_T("%.2f %s"),
+                                              toUsrDistance_Plugin(distance),
                                               getUsrDistanceUnit_Plugin())
                            : _("N/A"));
   const double hours = timed ? (end - start).GetSeconds().ToDouble() / 3600 : 0;
   m_speed->SetLabel(distanceKnown && hours > 0
-                        ? wxString::Format(_T("%.1f %s"), distance / hours,
+                        ? wxString::Format(_T("%.1f %s"),
+                                           toUsrSpeed_Plugin(distance / hours),
                                            getUsrSpeedUnit_Plugin())
                         : _("N/A"));
 
@@ -259,7 +258,12 @@ void ResultsDialog::LoadSummary(const std::vector<RouteMapOverlay*>& routes) {
                                             : wxString(_("Route")));
     m_legs->SetItem(row, 1, w->StartTime);
     m_legs->SetItem(row, 2, w->EndTime);
-    m_legs->SetItem(row, 3, w->Distance);
+    const double legNm = RouteDistanceNm(r);
+    m_legs->SetItem(row, 3, std::isnan(legNm)
+                                ? wxString(_("N/A"))
+                                : wxString::Format(_T("%.2f %s"),
+                                                   toUsrDistance_Plugin(legNm),
+                                                   getUsrDistanceUnit_Plugin()));
     m_legs->SetItem(row, 4, w->AvgSpeed);
     m_legs->SetItem(row, 5, w->AvgWind + _T(" / ") + w->MaxWind);
     m_legs->SetItem(row, 6, w->AvgCurrent);
@@ -352,11 +356,13 @@ void ResultsDialog::LoadCompare(const std::vector<RouteMapOverlay*>& routes) {
                        ? item.routes.back()->EndTime()
                        : wxDateTime();
     item.distance = 0;
+    bool known = true;
     for (RouteMapOverlay* r : item.routes) {
-      WeatherRoute* w = RowFor(r);
-      const double d = w ? LeadingNumber(w->Distance) : NAN;
-      if (!std::isnan(d)) item.distance += d;
+      const double d = RouteDistanceNm(r);
+      if (std::isnan(d)) known = false;
+      else item.distance += d;
     }
+    if (!known) item.distance = NAN;
     item.comfort = lastRow ? lastRow->Comfort : wxString();
     item.state = lastRow ? lastRow->State : wxString();
     same.push_back(item);
@@ -389,7 +395,11 @@ void ResultsDialog::LoadCompare(const std::vector<RouteMapOverlay*>& routes) {
                        : wxString::Format(_("+%ld min"), min);
     }
     m_compare->SetItem(row, 2, extra);
-    m_compare->SetItem(row, 3, wxString::Format(_T("%.2f"), item.distance));
+    m_compare->SetItem(row, 3, std::isnan(item.distance)
+                                   ? wxString(_("N/A"))
+                                   : wxString::Format(
+                                         _T("%.2f"),
+                                         toUsrDistance_Plugin(item.distance)));
     m_compare->SetItem(row, 4, item.comfort);
     m_compare->SetItem(row, 5, item.state);
     if (item.routes.front() == routes.front())

@@ -465,6 +465,9 @@ public:
   void ShowRouteSettings();
   /** Opens the results window for the selected route or passage. */
   void ShowResults();
+  /** Computes the selection; legs of one passage compute as the whole
+   * passage, in order, each leg starting when the previous one arrives. */
+  void ComputeSelection();
   class ResultsDialog* m_ResultsDialog = nullptr;
   /** The selection, or every leg of a passage when the selection is one or
    * more legs of the same passage. */
