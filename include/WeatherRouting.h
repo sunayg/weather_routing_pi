@@ -224,6 +224,7 @@ class WeatherRouting : public WeatherRoutingBase {
 private:
   friend class RoutingTablePanel;
   friend class RouteComparisonDialog;
+  friend class RouteSettingsDialog;
 
   bool m_disable_colpane;
   wxCollapsiblePane* m_colpane;
@@ -454,6 +455,10 @@ public:
   /** Opens the compact passage-planning dialog for an OpenCPN route and, if
    * confirmed, creates (and optionally computes) the legs. */
   bool ShowPassageDialog(const wxString& routeGuid);
+  /** Opens the single-page route settings dialog for the selected routes
+   * (desktop). */
+  void ShowRouteSettings();
+  class RouteSettingsDialog* m_RouteSettingsDialog = nullptr;
   bool ComputeMultiLegSequence(RouteMapOverlay* selectedRoute);
   bool EditMultiLegGroupSettings(RouteMapOverlay* selectedRoute);
 

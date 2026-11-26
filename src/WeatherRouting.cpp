@@ -63,6 +63,7 @@
 #include "MultiLegRouteOutput.h"
 #include "PassageDialog.h"
 #include "ConfigurationXml.h"
+#include "RouteSettingsDialog.h"
 #include "RouteWaypointExtractor.h"
 #include "RouteWaypointValidation.h"
 #include "RoutingEndpointPreflight.h"
@@ -2436,6 +2437,14 @@ bool WeatherRouting::CreateMultiLegConfigurationsFromRoute(
   return true;
 }
 
+void WeatherRouting::ShowRouteSettings() {
+  if (!m_RouteSettingsDialog)
+    m_RouteSettingsDialog = new RouteSettingsDialog(this, *this);
+  m_RouteSettingsDialog->Load();
+  m_RouteSettingsDialog->Show();
+  m_RouteSettingsDialog->Raise();
+}
+
 bool WeatherRouting::ShowPassageDialog(const wxString& routeGuid) {
   std::vector<RouteWaypointInfo> waypoints;
   wxString error;
@@ -2574,8 +2583,12 @@ void WeatherRouting::BeginMultiLegGroupSettingsEdit(const wxString& groupId) {
         "will be reset when settings are changed."),
       _("Weather Routing"), wxOK | wxICON_INFORMATION, this);
 #endif
+#ifdef __OCPN__ANDROID__
   m_ConfigurationDialog.Show();
   m_ConfigurationDialog.Raise();
+#else
+  ShowRouteSettings();
+#endif
 }
 
 bool WeatherRouting::EditMultiLegGroupSettings(RouteMapOverlay* selectedRoute) {
@@ -6275,7 +6288,11 @@ void WeatherRouting::OnEditConfiguration() {
   m_MultiLegSettingsGroupId.Clear();
   m_MultiLegLegSnapshots.clear();
 
+#ifdef __OCPN__ANDROID__
   m_ConfigurationDialog.Show();
+#else
+  ShowRouteSettings();
+#endif
 
 #if 0
     /* if boat filename doesn't exist open boat dialog immediately */
@@ -6426,6 +6443,8 @@ void WeatherRouting::OnWeatherRouteSelected() {
     m_ConfigurationDialog.SetConfigurations(currentconfigurations);
     m_bSkipUpdateCurrentItems = false;
   }
+  if (m_RouteSettingsDialog && m_RouteSettingsDialog->IsShown())
+    m_RouteSettingsDialog->Load();
 
   UpdateDialogs();
 
@@ -8547,7 +8566,11 @@ bool WeatherRouting::Show(bool show) {
   m_weather_routing_pi.ShowMenuItems(show);
 
   if (show) {
+#ifdef __OCPN__ANDROID__
     m_ConfigurationDialog.Show(m_bShowConfiguration);
+#else
+    if (m_bShowConfiguration) ShowRouteSettings();
+#endif
     m_ConfigurationBatchDialog.Show(m_bShowConfigurationBatch);
     m_SettingsDialog.Show(m_bShowSettings);
     m_StatisticsDialog.Show(m_bShowStatistics);
@@ -8556,8 +8579,10 @@ bool WeatherRouting::Show(bool show) {
     m_FilterRoutesDialog.Show(m_bShowFilter);
     m_RoutePositionDialog.Show(m_bShowRoutePosition);
   } else {
-    m_bShowConfiguration = m_ConfigurationDialog.IsShown();
+    m_bShowConfiguration = m_ConfigurationDialog.IsShown() ||
+        (m_RouteSettingsDialog && m_RouteSettingsDialog->IsShown());
     m_ConfigurationDialog.Hide();
+    if (m_RouteSettingsDialog) m_RouteSettingsDialog->Hide();
 
     m_bShowConfigurationBatch = m_ConfigurationBatchDialog.IsShown();
     m_ConfigurationBatchDialog.Hide();
