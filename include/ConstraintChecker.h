@@ -146,6 +146,17 @@ public:
                                           double dlon);
 
   /**
+   * Check a route segment against the configuration's per-mark rules
+   * (keep-out radius, leave-to-port/starboard barrier).
+   *
+   * @return true if the segment breaks no rule, false otherwise. Always true
+   * when the configuration has no mark rules.
+   */
+  static bool CheckMarkRuleConstraint(const RouteMapConfiguration& configuration,
+                                      double lat, double lon, double dlat,
+                                      double dlon);
+
+  /**
    * Check if the maximum course angle constraint is met.
    *
    * Verifies if the course to the destination position (dlat,dlon)

@@ -579,6 +579,13 @@ double RoutePoint::PropagateToPoint(double dlat, double dlon,
     return NAN;
   }
 
+  /* per-mark rules */
+  if (!ConstraintChecker::CheckMarkRuleConstraint(
+          configuration, lat, lon, configuration.EndLat, configuration.EndLon)) {
+    if (!end) configuration.boundary_crossing = true;
+    return NAN;
+  }
+
   /* crosses cyclone track(s)? */
   if (!ConstraintChecker::CheckCycloneTrackConstraint(configuration, lat, lon,
                                                       configuration.EndLat,

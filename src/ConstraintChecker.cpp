@@ -816,6 +816,14 @@ bool ConstraintChecker::CheckMaxLatitudeConstraint(
   return true;
 }
 
+bool ConstraintChecker::CheckMarkRuleConstraint(
+    const RouteMapConfiguration& configuration, double lat, double lon,
+    double dlat, double dlon) {
+  if (configuration.MarkRules.empty()) return true;
+  return !weather_routing::SegmentViolatesAnyMarkRule(configuration.MarkRules,
+                                                      lat, lon, dlat, dlon);
+}
+
 bool ConstraintChecker::CheckCycloneTrackConstraint(
     RouteMapConfiguration& configuration, double lat, double lon, double dlat,
     double dlon) {

@@ -449,7 +449,11 @@ public:
    */
   void AddPosition(double lat, double lon, wxString name, wxString GUID);
   void AddRoute(wxString& GUID);
-  bool CreateMultiLegConfigurationsFromRoute(const wxString& routeGuid);
+  bool CreateMultiLegConfigurationsFromRoute(
+      const wxString& routeGuid, const struct PassageRequest* passage = nullptr);
+  /** Opens the compact passage-planning dialog for an OpenCPN route and, if
+   * confirmed, creates (and optionally computes) the legs. */
+  bool ShowPassageDialog(const wxString& routeGuid);
   bool ComputeMultiLegSequence(RouteMapOverlay* selectedRoute);
   bool EditMultiLegGroupSettings(RouteMapOverlay* selectedRoute);
 

@@ -288,6 +288,8 @@ SET(SRCS
             src/EditPolarDialog.cpp
             src/AboutDialog.cpp
             src/ConstraintChecker.cpp
+            src/MarkRules.cpp
+            src/PassageDialog.cpp
             src/ClimatologyThreadGuard.cpp
             src/Polar.cpp
             src/Boat.cpp

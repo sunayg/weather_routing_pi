@@ -501,6 +501,23 @@ bool Position::Propagate(IsoRouteList& routelist,
           }
         }
       }
+      /* per-mark rules (keep-out radius, leave-to-port/starboard). Like the
+         boundary test, ignore the part of the step beyond the destination. */
+      if (!configuration.MarkRules.empty()) {
+        double mark_lat = dlat, mark_lon = dlon;
+        double mark_bearing, mark_dist2end;
+        ll_gc_ll_reverse(lat, lon, configuration.EndLat, configuration.EndLon,
+                         &mark_bearing, &mark_dist2end);
+        if (mark_dist2end < boat_data.dist)
+          ll_gc_ll(lat, lon, heading_resolve(boat_data.cog), mark_dist2end,
+                   &mark_lat, &mark_lon);
+        if (!ConstraintChecker::CheckMarkRuleConstraint(configuration, lat, lon,
+                                                        mark_lat, mark_lon)) {
+          configuration.boundary_crossing = true;
+          configuration.rejection_counts[PROPAGATION_BOUNDARY_INTERSECTION]++;
+          return;
+        }
+      }
       /* crosses cyclone track(s)? */
       if (!ConstraintChecker::CheckCycloneTrackConstraint(configuration, lat,
                                                           lon, dlat, dlon)) {

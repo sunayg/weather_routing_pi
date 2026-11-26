@@ -953,6 +953,10 @@ private:
       RoutePoint point(start.latitude, start.longitude);
       if (point.EntersBoundary(end.latitude, end.longitude)) return true;
     }
+    if (!ConstraintChecker::CheckMarkRuleConstraint(
+            configuration, start.latitude, start.longitude, end.latitude,
+            end.longitude))
+      return true;
     return !ConstraintChecker::CheckCycloneTrackConstraint(
         configuration, start.latitude, start.longitude, end.latitude,
         end.longitude);

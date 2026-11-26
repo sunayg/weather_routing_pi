@@ -50,6 +50,8 @@ set(TEST_SRC
     ${WEATHER_ROUTING_SOURCE_DIR}/src/engine/adaptive/Quick2.cpp
     ${WEATHER_ROUTING_SOURCE_DIR}/src/engine/adaptive/StandardRecovery.cpp
     RouteWaypointValidation_tests.cpp
+    MarkRules_tests.cpp
+    ${WEATHER_ROUTING_SOURCE_DIR}/src/MarkRules.cpp
     RoutingEndpointPreflight_tests.cpp
     ${WEATHER_ROUTING_SOURCE_DIR}/src/RouteWaypointValidation.cpp
     RouteDiagnostics_tests.cpp

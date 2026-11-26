@@ -61,6 +61,7 @@
 #include "RouteMapOverlay.h"
 #include "ModernNativeRoute.h"
 #include "MultiLegRouteOutput.h"
+#include "PassageDialog.h"
 #include "RouteWaypointExtractor.h"
 #include "RouteWaypointValidation.h"
 #include "RoutingEndpointPreflight.h"
@@ -2272,7 +2273,7 @@ void WeatherRouting::AddRoute(wxString& GUID) {
 }
 
 bool WeatherRouting::CreateMultiLegConfigurationsFromRoute(
-    const wxString& routeGuid) {
+    const wxString& routeGuid, const PassageRequest* passage) {
   std::vector<RouteWaypointInfo> waypoints;
   wxString error;
   if (!ExtractOpenCPNRouteWaypoints(routeGuid, waypoints, error)) {
@@ -2316,6 +2317,35 @@ bool WeatherRouting::CreateMultiLegConfigurationsFromRoute(
   size_t legCount = waypoints.size() - 1;
   int added = 0;
 
+  // Passage with mark rules: work out where each leg starts and ends and which mark rules
+  // apply to it. Passing points beside a mark become named positions.
+  std::vector<weather_routing::PassageLeg> passagePlan;
+  std::vector<wxString> passName(waypoints.size());
+  if (passage) {
+    std::vector<weather_routing::PassageMark> marks;
+    for (const auto& w : waypoints) marks.push_back({w.lat, w.lon});
+    passagePlan = weather_routing::PlanPassageLegs(marks, passage->via, passage->avoid);
+    if (passagePlan.size() != legCount) {
+      WR_MessageBox(_("The passage could not be planned."),
+                    _("Weather Routing"), wxOK | wxICON_WARNING, this);
+      return false;
+    }
+    for (size_t i = 0; i < legCount; ++i) {
+      if (!passagePlan[i].end_is_mark) {
+        const double lat = passagePlan[i].end_lat, lon = passagePlan[i].end_lon;
+        const bool port =
+            passage->via[i].side == weather_routing::MarkSide::LeaveToPort;
+        passName[i + 1] = wxString::Format(
+            _T("%s: pass %s %s %s"), routeName, waypoints[i + 1].name,
+            port ? _T("(port)") : _T("(stbd)"),
+            wxDateTime::Now().Format(_T("%H%M%S")));
+        AddPosition(lat, lon, passName[i + 1]);
+      }
+    }
+    base.StartTime = passage->start;
+    base.UseCurrentTime = false;
+  }
+
   wxLogMessage(
       "WeatherRouting multi-leg leg creation: route=%s name=%s legs=%lu",
       routeGuid, routeName, static_cast<unsigned long>(legCount));
@@ -2347,6 +2377,25 @@ bool WeatherRouting::CreateMultiLegConfigurationsFromRoute(
     leg.MultiLegLegIndex = i + 1;
     leg.MultiLegLegCount = legCount;
 
+    if (passage) {
+      const weather_routing::PassageLeg& plan = passagePlan[i];
+      if (!plan.start_is_mark) {
+        leg.StartType = RouteMapConfiguration::START_FROM_POSITION;
+        leg.Start = passName[i];
+        leg.StartGUID.Clear();
+        leg.StartLat = plan.start_lat;
+        leg.StartLon = plan.start_lon;
+      }
+      if (!plan.end_is_mark) {
+        leg.EndType = RouteMapConfiguration::END_AT_POSITION;
+        leg.End = passName[i + 1];
+        leg.EndGUID.Clear();
+        leg.EndLat = plan.end_lat;
+        leg.EndLon = plan.end_lon;
+      }
+      leg.MarkRules = plan.rules;
+    }
+
     wxString legName = wxString::Format(
         "Multi-leg %s Leg %lu/%lu: %s to %s", routeName,
         static_cast<unsigned long>(i + 1), static_cast<unsigned long>(legCount),
@@ -2372,9 +2421,54 @@ bool WeatherRouting::CreateMultiLegConfigurationsFromRoute(
   }
 
   if (!IsShown()) Show(true);
+  if (passage) {
+    SelectMultiLegGroup(groupId);
+    m_tAutoSaveXML.Start(5000, true);
+    if (passage->compute_now) {
+      std::vector<RouteMapOverlay*> legs = GetMultiLegGroupRoutes(groupId);
+      if (!legs.empty()) ComputeMultiLegSequence(legs.front());
+    }
+    return true;
+  }
   BeginMultiLegGroupSettingsEdit(groupId);
   m_tAutoSaveXML.Start(5000, true);
   return true;
+}
+
+bool WeatherRouting::ShowPassageDialog(const wxString& routeGuid) {
+  std::vector<RouteWaypointInfo> waypoints;
+  wxString error;
+  if (!ExtractOpenCPNRouteWaypoints(routeGuid, waypoints, error)) {
+    WR_MessageBox(error, _("Weather Routing"), wxOK | wxICON_WARNING, this);
+    return false;
+  }
+  if (waypoints.size() < 2) {
+    WR_MessageBox(_("The route needs at least two marks."),
+                  _("Weather Routing"), wxOK | wxICON_WARNING, this);
+    return false;
+  }
+
+  std::vector<PassageMarkChoice> choices;
+  wxArrayString guids = GetWaypointGUIDArray();
+  for (size_t i = 0; i < guids.GetCount(); ++i) {
+    std::unique_ptr<PlugIn_Waypoint> w = GetWaypoint_Plugin(guids[i]);
+    if (!w) continue;
+    PassageMarkChoice c;
+    c.name = w->m_MarkName;
+    c.lat = w->m_lat;
+    c.lon = w->m_lon;
+    choices.push_back(c);
+  }
+
+  wxDateTime defaultStart;
+  if (FirstCurrentRouteMap())
+    defaultStart = FirstCurrentRouteMap()->GetConfiguration().StartTime;
+
+  PassageDialog dialog(this, GetRouteNameForGuid(routeGuid), waypoints,
+                         choices, defaultStart);
+  if (dialog.ShowModal() != wxID_OK) return false;
+  const PassageRequest request = dialog.GetRequest();
+  return CreateMultiLegConfigurationsFromRoute(routeGuid, &request);
 }
 
 std::vector<RouteMapOverlay*> WeatherRouting::GetMultiLegGroupRoutes(
@@ -2440,6 +2534,7 @@ void WeatherRouting::PreserveMultiLegLegFields(
   configuration.EndGUID = original.EndGUID;
   configuration.EndLat = original.EndLat;
   configuration.EndLon = original.EndLon;
+  configuration.MarkRules = original.MarkRules;  // rules belong to the leg
   configuration.IsMultiLegGenerated = true;
   configuration.MultiLegGroupId = original.MultiLegGroupId;
   configuration.MultiLegParentRouteGUID = original.MultiLegParentRouteGUID;
@@ -10217,6 +10312,37 @@ bool WeatherRouting::OpenXML(wxString filename, bool reportfailure) {
             wxMax(0.0, AttributeDouble(e, "MinimumDepthMeters", 0.));
         configuration.DetectBoundary =
             AttributeBool(e, "DetectBoundary", false);
+        configuration.MarkRules.clear();
+        for (TiXmlElement* m = e->FirstChildElement("MarkRule"); m;
+             m = m->NextSiblingElement("MarkRule")) {
+          weather_routing::MarkRule rule;
+          rule.lat = AttributeDouble(m, "Lat", NAN);
+          rule.lon = AttributeDouble(m, "Lon", NAN);
+          if (!std::isfinite(rule.lat) || !std::isfinite(rule.lon)) continue;
+          rule.clearance_nm =
+              wxMax(0.0, AttributeDouble(m, "ClearanceNm", 0.));
+          const char* side = m->Attribute("Side");
+          const wxString sideName = side ? wxString::FromUTF8(side) : wxString();
+          if (sideName == "LeaveToPort")
+            rule.side = weather_routing::MarkSide::LeaveToPort;
+          else if (sideName == "LeaveToStarboard")
+            rule.side = weather_routing::MarkSide::LeaveToStarboard;
+          else
+            rule.side = weather_routing::MarkSide::Any;
+          rule.barrier_length_nm =
+              wxMax(0.0, AttributeDouble(m, "BarrierLengthNm", 20.));
+          if (m->Attribute("BarrierBearing")) {
+            rule.barrier_bearing_deg = AttributeDouble(m, "BarrierBearing", 0.);
+          } else {
+            /* Hand-written files may give the direction of travel past the
+               mark instead; the barrier side follows from it. */
+            rule = weather_routing::MakeMarkRule(
+                rule.lat, rule.lon, rule.clearance_nm, rule.side,
+                AttributeDouble(m, "TravelBearing", 0.),
+                rule.barrier_length_nm);
+          }
+          configuration.MarkRules.push_back(rule);
+        }
         configuration.Currents = AttributeBool(e, "Currents", true);
         configuration.OptimizeTacking =
             AttributeBool(e, "OptimizeTacking", false);
@@ -10422,6 +10548,22 @@ void WeatherRouting::SaveXML(wxString filename) {
                           configuration.MotorSpeedThreshold);
     c->SetDoubleAttribute("MotorSpeed", configuration.MotorSpeed);
 
+    for (const weather_routing::MarkRule& rule : configuration.MarkRules) {
+      TiXmlElement* m = new TiXmlElement("MarkRule");
+      m->SetDoubleAttribute("Lat", rule.lat);
+      m->SetDoubleAttribute("Lon", rule.lon);
+      m->SetDoubleAttribute("ClearanceNm", rule.clearance_nm);
+      m->SetAttribute(
+          "Side",
+          rule.side == weather_routing::MarkSide::LeaveToPort
+              ? "LeaveToPort"
+              : rule.side == weather_routing::MarkSide::LeaveToStarboard
+                    ? "LeaveToStarboard"
+                    : "Any");
+      m->SetDoubleAttribute("BarrierBearing", rule.barrier_bearing_deg);
+      m->SetDoubleAttribute("BarrierLengthNm", rule.barrier_length_nm);
+      c->LinkEndChild(m);
+    }
     root->LinkEndChild(c);
   }
 

@@ -310,6 +310,7 @@ private:
   int m_waypoint_menu_id;
   int m_route_menu_id;
   int m_route_multileg_menu_id;
+  int m_route_passage_menu_id{-1};
   int m_route_check_menu_id{-1};
 
   wxTimer m_tCursorLatLon;

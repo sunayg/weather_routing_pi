@@ -271,6 +271,8 @@ int weather_routing_pi::Init() {
       new wxMenuItem(&dummy_menu, -1, _("Create Weather Routing Legs...")),
       this,
       "Route");
+  m_route_passage_menu_id = AddCanvasMenuItem(
+      new wxMenuItem(&dummy_menu, -1, _("Plan Passage...")), this, "Route");
   m_route_check_menu_id = AddCanvasMenuItem(
       new wxMenuItem(&dummy_menu, -1, wxString::Format(_("Check this route (%s)..."), GetCommonName())),
       this, "Route");
@@ -311,6 +313,10 @@ bool weather_routing_pi::DeInit() {
   if (m_route_check_menu_id >= 0) {
     RemoveCanvasMenuItem(m_route_check_menu_id, "Route");
     m_route_check_menu_id = -1;
+  }
+  if (m_route_passage_menu_id >= 0) {
+    RemoveCanvasMenuItem(m_route_passage_menu_id, "Route");
+    m_route_passage_menu_id = -1;
   }
   m_chart_safety_atlas_timer.Stop();
   if (m_chart_safety_atlas_filter_installed) {
@@ -887,6 +893,9 @@ void weather_routing_pi::OnContextMenuItemCallback(int id) {
     wxString GUID = GetSelectedRouteGUID_Plugin();
     wxLogMessage("WeatherRouting multi-leg selected route: route=%s", GUID);
     m_pWeather_Routing->CreateMultiLegConfigurationsFromRoute(GUID);
+    return;
+  } else if (id == m_route_passage_menu_id) {
+    m_pWeather_Routing->ShowPassageDialog(GetSelectedRouteGUID_Plugin());
     return;
   }
   m_pWeather_Routing->Reset();

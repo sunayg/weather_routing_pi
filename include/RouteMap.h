@@ -43,6 +43,7 @@
 #include "GribRecordSet.h"
 #include "GribTimelineFrameCache.h"
 #include "ConstraintChecker.h"
+#include "MarkRules.h"
 #include "RoutePoint.h"
 #include "Position.h"
 #include "Boat.h"
@@ -674,6 +675,14 @@ struct RouteMapConfiguration {
    * defined exclusion zones or boundary areas during route calculation.
    */
   bool DetectBoundary;
+
+  /**
+   * Per-mark routing rules: a keep-out radius and/or a required side to leave
+   * a mark on. A routing step that breaks any rule is rejected, in every
+   * engine that uses the shared constraint checks. Empty means no rules.
+   * Saved and loaded with the configuration.
+   */
+  std::vector<weather_routing::MarkRule> MarkRules;
 
   /**
    * If true and grib data contains ocean currents, the route calculation will
