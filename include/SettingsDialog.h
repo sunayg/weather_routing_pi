@@ -32,6 +32,9 @@ class AddressSpaceMonitor;
 
 class SettingsDialog : public SettingsDialogBase {
 public:
+  // Desktop (not Windows, not Android): one compact page built from the
+  // existing controls (docs/ui-redesign.md, Settings).
+  void ApplyCompactLayout();
   SettingsDialog(wxWindow* parent);
   ~SettingsDialog();
 

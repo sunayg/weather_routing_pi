@@ -380,6 +380,9 @@ SettingsDialog::SettingsDialog(wxWindow* parent)
 
   wxLogMessage("SettingsDialog::Constructor - Initialization complete");
 #endif
+#if !defined(__OCPN__ANDROID__) && !defined(__WXMSW__)
+  ApplyCompactLayout();
+#endif
 }
 
 SettingsDialog::~SettingsDialog() {
@@ -960,4 +963,117 @@ void SettingsDialog::OnHelp(wxCommandEvent& event) {
   WR_MessageDialog dialog(this, message, _("Weather Routing settings"),
                            wxOK | wxICON_INFORMATION);
   dialog.ShowModal();
+}
+
+void SettingsDialog::ApplyCompactLayout() {
+  SetTitle(_("Weather Routing settings"));
+  const int pad = WR_FromDIP(this, 5);
+  wxScrolledWindow* page = new wxScrolledWindow(
+      this, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxVSCROLL);
+  page->SetScrollRate(0, WR_FromDIP(this, 12));
+  wxBoxSizer* body = new wxBoxSizer(wxVERTICAL);
+  wxFont bold = GetFont();
+  bold.SetWeight(wxFONTWEIGHT_BOLD);
+  auto heading = [&](wxWindow* parent, wxSizer* sizer, const wxString& text) {
+    wxStaticText* t = new wxStaticText(parent, wxID_ANY, text);
+    t->SetFont(bold);
+    sizer->Add(t, 0, wxLEFT | wxRIGHT | wxTOP, 2 * pad);
+  };
+  auto take = [&](wxWindow* w, wxWindow* parent) {
+    w->Reparent(parent);
+    w->Show();
+    return w;
+  };
+  auto label = [&](wxWindow* parent, const wxString& text) {
+    return new wxStaticText(parent, wxID_ANY, text);
+  };
+
+  // ---- On the chart ---------------------------------------------------------
+  heading(page, body, _("On the chart"));
+  {
+    wxFlexGridSizer* ticks = new wxFlexGridSizer(2, pad, 4 * pad);
+    const std::pair<wxCheckBox*, wxString> boxes[] = {
+        {m_cbDisplayWindBarbs, _("Wind barbs on the route")},
+        {m_cbDisplayCurrent, _("Current arrows")},
+        {m_cbDisplayApparentWindBarbs, _("Barbs show apparent wind")},
+        {m_cbDisplayComfort, _("Sailing comfort colours")},
+        {m_cbDisplayCursorRoute, _("Route to the cursor")},
+        {m_cbMarkAtPolarChange, _("Mark sail changes")},
+        {m_cbAlternatesForAll, _("Alternates for every isochrone")},
+    };
+    for (const auto& [box, text] : boxes) {
+      take(box, page);
+      box->SetLabel(text);
+      ticks->Add(box, 0);
+    }
+    body->Add(ticks, 0, wxALL, 2 * pad);
+
+    wxFlexGridSizer* look = new wxFlexGridSizer(4, pad, 2 * pad);
+    look->Add(label(page, _("Route colour")), 0, wxALIGN_CENTER_VERTICAL);
+    look->Add(take(m_cpDestinationRoute, page), 0);
+    look->Add(label(page, _("Cursor route colour")), 0, wxALIGN_CENTER_VERTICAL);
+    look->Add(take(m_cpCursorRoute, page), 0);
+    look->Add(label(page, _("Route width")), 0, wxALIGN_CENTER_VERTICAL);
+    look->Add(take(m_sRouteThickness, page), 0);
+    look->Add(label(page, _("Isochrone width")), 0, wxALIGN_CENTER_VERTICAL);
+    look->Add(take(m_sIsoChronThickness, page), 0);
+    look->Add(label(page, _("Alternate route width")), 0, wxALIGN_CENTER_VERTICAL);
+    look->Add(take(m_sAlternateRouteThickness, page), 0);
+    look->Add(label(page, _("Wind barb width")), 0, wxALIGN_CENTER_VERTICAL);
+    look->Add(take(m_sWindBarbsOnRouteThickness, page), 0);
+    body->Add(look, 0, wxLEFT | wxRIGHT | wxBOTTOM, 2 * pad);
+  }
+
+  // ---- Routes list ----------------------------------------------------------
+  heading(page, body, _("Routes list"));
+  {
+    body->Add(label(page, _("Columns shown:")), 0, wxLEFT | wxTOP, 2 * pad);
+    take(m_cblFields, page);
+    m_cblFields->SetMinSize(wxSize(WR_FromDIP(this, 260), WR_FromDIP(this, 150)));
+    body->Add(m_cblFields, 0, wxALL, 2 * pad);
+  }
+
+  // ---- Computer -------------------------------------------------------------
+  heading(page, body, _("Computer"));
+  {
+    wxFlexGridSizer* g = new wxFlexGridSizer(2, pad, 2 * pad);
+    g->Add(label(page, _("Routing workers")), 0, wxALIGN_CENTER_VERTICAL);
+    g->Add(take(m_sConcurrentThreads, page), 0);
+    take(m_cbParallelMethods, page);
+    m_cbParallelMethods->SetLabel(_("Run engines in parallel, at most"));
+    g->Add(m_cbParallelMethods, 0, wxALIGN_CENTER_VERTICAL);
+    g->Add(take(m_sParallelMethods, page), 0);
+    take(m_cbAdditionalHelpers, page);
+    m_cbAdditionalHelpers->SetLabel(_("Use extra calculation helpers"));
+    g->Add(m_cbAdditionalHelpers, 0);
+    body->Add(g, 0, wxALL, 2 * pad);
+  }
+
+  // (The memory monitor exists only in the Windows build, which keeps the
+  // previous layout.)
+  page->SetSizer(body);
+
+  // Everything else from the generated layout stays hidden.
+  for (wxWindow* child : GetChildren())
+    if (child != page && child != m_sdbSizer1OK && child != m_sdbSizer1Help)
+      child->Hide();
+
+  wxBoxSizer* top = new wxBoxSizer(wxVERTICAL);
+  top->Add(page, 1, wxEXPAND);
+  wxBoxSizer* buttons = new wxBoxSizer(wxHORIZONTAL);
+  buttons->Add(m_sdbSizer1Help, 0);
+  buttons->AddStretchSpacer();
+  m_sdbSizer1OK->SetLabel(_("Close"));
+  buttons->Add(m_sdbSizer1OK, 0);
+  top->Add(buttons, 0, wxEXPAND | wxALL, 2 * pad);
+  // Keep the generated sizers alive (they own the hidden static boxes).
+  SetSizer(top, false);
+
+  page->FitInside();
+  const wxSize content = body->GetMinSize();
+  const wxSize screen = wxGetDisplaySize();
+  page->SetMinSize(wxSize(content.x + WR_FromDIP(this, 20),
+                          std::min(content.y, screen.y * 80 / 100 -
+                                                  WR_FromDIP(this, 80))));
+  Fit();
 }
