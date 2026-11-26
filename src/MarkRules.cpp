@@ -129,58 +129,94 @@ void OffsetPoint(double lat, double lon, double bearing_deg, double nm,
   if (out_lon) *out_lon = lon + nm * std::sin(b) / kx;
 }
 
+namespace {
+double Norm360(double d) {
+  d = std::fmod(d, 360.0);
+  return d < 0 ? d + 360.0 : d;
+}
+double DistanceNm(double lat0, double lon0, double lat1, double lon1) {
+  const Vec v = ToPlane(lat0, lon0, lat1, lon1);
+  return std::hypot(v.x, v.y);
+}
+}  // namespace
+
 std::vector<PassageLeg> PlanPassageLegs(const std::vector<PassageMark>& marks,
-                                  const std::vector<ViaSpec>& via,
-                                  const std::vector<AvoidMark>& avoid,
-                                  double barrier_length_nm,
-                                  double pass_offset_nm) {
+                                        const std::vector<ViaSpec>& via,
+                                        const std::vector<AvoidMark>& avoid,
+                                        double barrier_length_nm,
+                                        double pass_offset_nm) {
   const size_t n = marks.size();
   if (n < 2 || via.size() != n - 2) return {};
 
+  // A side rule is judged by each leg on its own: the leg into the mark by
+  // its incoming direction, the leg out by its outgoing direction. Using the
+  // chord from the previous mark to the next one (as before) gave an
+  // arbitrary barrier at a rounding mark, where that chord is short, and put
+  // the barrier through the start of an out-and-back course.
   struct Via {
-    bool active = false;  // has a rule (side or clearance)
-    MarkRule rule;
+    bool sided = false;
+    MarkRule in, out;  // rules for the leg ending here / starting here
     double pass_lat = 0, pass_lon = 0;
-    bool offset = false;  // use the passing point instead of the mark
   };
   std::vector<Via> v(n);
   for (size_t k = 1; k + 1 < n; ++k) {
     const ViaSpec& s = via[k - 1];
-    const double travel = TravelBearingDeg(marks[k - 1].lat, marks[k - 1].lon,
-                                           marks[k + 1].lat, marks[k + 1].lon);
-    v[k].pass_lat = marks[k].lat;
-    v[k].pass_lon = marks[k].lon;
-    if (s.side != MarkSide::Any || s.clearance_nm > 0) {
-      v[k].active = true;
-      v[k].rule = MakeMarkRule(marks[k].lat, marks[k].lon, s.clearance_nm,
-                               s.side, travel, barrier_length_nm);
-    }
-    if (s.side != MarkSide::Any) {
-      // The boat passes on the opposite side to the barrier.
-      const double away = std::fmod(v[k].rule.barrier_bearing_deg + 180.0, 360.0);
-      const double off = std::max(pass_offset_nm, s.clearance_nm + 0.05);
-      OffsetPoint(marks[k].lat, marks[k].lon, away, off, &v[k].pass_lat,
-                  &v[k].pass_lon);
-      v[k].offset = true;
-    }
+    if (s.side == MarkSide::Any) continue;  // pass through the mark itself
+    const PassageMark& m = marks[k];
+    const double b_in = TravelBearingDeg(marks[k - 1].lat, marks[k - 1].lon,
+                                         m.lat, m.lon);
+    const double b_out = TravelBearingDeg(m.lat, m.lon, marks[k + 1].lat,
+                                          marks[k + 1].lon);
+    const double len_in = DistanceNm(marks[k - 1].lat, marks[k - 1].lon,
+                                     m.lat, m.lon);
+    const double len_out = DistanceNm(m.lat, m.lon, marks[k + 1].lat,
+                                      marks[k + 1].lon);
+    // Long enough that the wrong side cannot be reached by a short detour,
+    // short enough not to reach unrelated water on long passages.
+    const double wall = std::clamp(2.0 * std::max(len_in, len_out), 1.0,
+                                   barrier_length_nm);
+    v[k].sided = true;
+    v[k].in = MakeMarkRule(m.lat, m.lon, s.clearance_nm, s.side, b_in, wall);
+    v[k].out = MakeMarkRule(m.lat, m.lon, s.clearance_nm, s.side, b_out, wall);
+
+    // Passing point: halfway round the turn, on the allowed side. With the
+    // mark to port the boat turns left round it (to starboard: right), so a
+    // turn towards the mark of up to 210 degrees is a rounding, including a
+    // leeward mark a little either side of the start. Anything beyond that is
+    // read as a bend away from the mark (at most 150 degrees).
+    const bool port = s.side == MarkSide::LeaveToPort;
+    const double toward = Norm360(port ? b_in - b_out : b_out - b_in);
+    const double turn = toward <= 210.0 ? toward : toward - 360.0;
+    const double allowed_in = port ? b_in + 90.0 : b_in - 90.0;
+    const double away = Norm360(port ? allowed_in - turn / 2.0
+                                     : allowed_in + turn / 2.0);
+    const double off = std::max(pass_offset_nm, s.clearance_nm + 0.05);
+    OffsetPoint(m.lat, m.lon, away, off, &v[k].pass_lat, &v[k].pass_lon);
   }
 
   std::vector<PassageLeg> legs(n - 1);
   for (size_t i = 0; i + 1 < n; ++i) {
     PassageLeg& leg = legs[i];
     const size_t a = i, b = i + 1;
-    leg.start_lat = v[a].offset ? v[a].pass_lat : marks[a].lat;
-    leg.start_lon = v[a].offset ? v[a].pass_lon : marks[a].lon;
-    leg.end_lat = v[b].offset ? v[b].pass_lat : marks[b].lat;
-    leg.end_lon = v[b].offset ? v[b].pass_lon : marks[b].lon;
-    leg.start_is_mark = !v[a].offset;
-    leg.end_is_mark = !v[b].offset;
-    if (v[a].active) leg.rules.push_back(v[a].rule);
-    if (v[b].active) leg.rules.push_back(v[b].rule);
-    for (const AvoidMark& m : avoid)
-      if (m.clearance_nm > 0)
-        leg.rules.push_back(MakeMarkRule(m.lat, m.lon, m.clearance_nm,
-                                         MarkSide::Any, 0, 0));
+    leg.start_is_mark = !v[a].sided;
+    leg.end_is_mark = !v[b].sided;
+    leg.start_lat = v[a].sided ? v[a].pass_lat : marks[a].lat;
+    leg.start_lon = v[a].sided ? v[a].pass_lon : marks[a].lon;
+    leg.end_lat = v[b].sided ? v[b].pass_lat : marks[b].lat;
+    leg.end_lon = v[b].sided ? v[b].pass_lon : marks[b].lon;
+    if (v[a].sided) leg.rules.push_back(v[a].out);
+    if (v[b].sided) leg.rules.push_back(v[b].in);
+    for (const AvoidMark& m : avoid) {
+      if (m.clearance_nm <= 0) continue;
+      // A leg cannot start or finish inside a keep-clear circle; such a mark
+      // sits on the course itself and is dropped for this leg.
+      if (DistanceNm(m.lat, m.lon, leg.start_lat, leg.start_lon) <
+              m.clearance_nm ||
+          DistanceNm(m.lat, m.lon, leg.end_lat, leg.end_lon) < m.clearance_nm)
+        continue;
+      leg.rules.push_back(
+          MakeMarkRule(m.lat, m.lon, m.clearance_nm, MarkSide::Any, 0, 0));
+    }
   }
   return legs;
 }

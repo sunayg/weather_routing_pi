@@ -22,12 +22,17 @@ Boat, wind, current and the other settings come from the route currently
 selected in Weather Routing (or the defaults). Set them there first.
 
 How it works: for a mark with a side, the leg before it ends and the leg after
-it starts at a *passing point* beside the mark, on the side you asked for,
-because a leg that ended exactly on the mark would break its own rule. The
-passing point is saved as a Weather Routing position named
-`<route>: pass <mark> (port|stbd) <time>`. Each leg carries only the rules for
-the marks at its own two ends, plus the keep-clear marks, so a mark further
-along never blocks an earlier leg.
+it starts at a *passing point* beside the mark, halfway round the turn on the
+side you asked for (beside the mark on a straight pass, just beyond it at a
+windward mark). A leg that ended exactly on the mark would break its own rule.
+Each of the two legs checks the side by its own direction: the leg in by its
+incoming course, the leg out by its outgoing course. Together they force the
+rounding the right way round, including out-and-back courses and leeward marks
+a little either side of the start. Barriers are twice the longer of the two
+legs, at most 20 nm. "Pass through" sails to the mark itself and has no
+clearance. Each leg carries only the rules for the marks at its own two ends
+plus the keep-clear marks; a keep-clear mark sitting on a leg's start or
+finish is dropped for that leg.
 
 A rule is attached to a route configuration. Any routing step that breaks a
 rule is rejected, in every engine that uses the shared constraint checks

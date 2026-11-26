@@ -70,8 +70,8 @@ struct PassageMark {
   double lat = 0, lon = 0;
 };
 struct ViaSpec {
-  MarkSide side = MarkSide::Any;
-  double clearance_nm = 0;
+  MarkSide side = MarkSide::Any;  // Any = pass through the mark itself
+  double clearance_nm = 0;        // used only with a side
 };
 struct AvoidMark {
   double lat = 0, lon = 0;

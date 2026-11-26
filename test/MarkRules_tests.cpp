@@ -267,3 +267,116 @@ TEST(PassCheck, UsesTheNearestOfSeveralSegments) {
 TEST(PassCheck, TooShortPathIsInvalid) {
   EXPECT_FALSE(wr::CheckPass(KeepOut(0.3), {{Lat(0), Lon(1)}}).valid);
 }
+
+// ---- Regression tests from the routing engine review (C1-C3) -----------------
+namespace {
+using Path = std::vector<std::pair<double, double>>;  // (east nm, north nm)
+// True when some segment of the path breaks one of the leg's rules.
+bool Breaks(const wr::PassageLeg& leg, const Path& p) {
+  for (size_t i = 0; i + 1 < p.size(); ++i)
+    for (const auto& r : leg.rules)
+      if (wr::SegmentViolatesMarkRule(r, Lat(p[i].second), Lon(p[i].first),
+                                      Lat(p[i + 1].second), Lon(p[i + 1].first)))
+        return true;
+  return false;
+}
+std::pair<double, double> EastNorth(double lat, double lon) {
+  return {(lon - kMarkLon) * 60 * std::cos(kMarkLat * 0.017453292519943295),
+          (lat - kMarkLat) * 60};
+}
+// Start at the origin, windward mark 2 nm north, leeward/finish near start.
+std::vector<wr::PassageLeg> WindwardLeeward(double finishEastNm,
+                                            wr::MarkSide side) {
+  return wr::PlanPassageLegs({{Lat(0), Lon(0)}, {Lat(2), Lon(0)},
+                              {Lat(0), Lon(finishEastNm)}},
+                             {{side, 0}}, {});
+}
+}  // namespace
+
+TEST(PassageReview, PortRoundingOfAWindwardMarkIsEnforced) {
+  // C1: whatever side of the start the leeward mark sits, the correct
+  // anticlockwise rounding passes and the clockwise one does not.
+  for (double finish : {0.0, 0.12, -0.12}) {
+    auto legs = WindwardLeeward(finish, wr::MarkSide::LeaveToPort);
+    ASSERT_EQ(legs.size(), 2u);
+    const auto pass = EastNorth(legs[0].end_lat, legs[0].end_lon);
+    EXPECT_GT(pass.second, 2.0) << "passing point beyond the mark, finish "
+                                << finish;
+    // Up the east side, over the top, down the west side.
+    EXPECT_FALSE(Breaks(legs[0], {{0, 0}, {0.3, 1.5}, {0.3, 2.1}, pass}))
+        << finish;
+    EXPECT_FALSE(Breaks(legs[1], {pass, {-0.3, 2.1}, {-0.3, 1.5}, {finish, 0}}))
+        << finish;
+    // The other way round breaks both legs.
+    EXPECT_TRUE(Breaks(legs[0], {{0, 0}, {-0.3, 1.5}, {-0.3, 2.1}, pass}))
+        << finish;
+    EXPECT_TRUE(Breaks(legs[1], {pass, {0.3, 2.1}, {0.3, 1.5}, {finish, 0}}))
+        << finish;
+  }
+}
+
+TEST(PassageReview, StarboardRoundingIsTheMirrorImage) {
+  auto legs = WindwardLeeward(0.0, wr::MarkSide::LeaveToStarboard);
+  const auto pass = EastNorth(legs[0].end_lat, legs[0].end_lon);
+  EXPECT_FALSE(Breaks(legs[0], {{0, 0}, {-0.3, 1.5}, {-0.3, 2.1}, pass}));
+  EXPECT_FALSE(Breaks(legs[1], {pass, {0.3, 2.1}, {0.3, 1.5}, {0, 0}}));
+  EXPECT_TRUE(Breaks(legs[0], {{0, 0}, {0.3, 1.5}, {0.3, 2.1}, pass}));
+}
+
+TEST(PassageReview, OutAndBackCourseCanLeaveAndReturn) {
+  // C2: S -> W -> S -> W -> S, W 2 nm east, all port. No barrier may touch
+  // a leg's own start or finish, so a leg can leave and arrive.
+  std::vector<wr::PassageMark> m = {{Lat(0), Lon(0)}, {Lat(0), Lon(2)},
+                                    {Lat(0), Lon(0)}, {Lat(0), Lon(2)},
+                                    {Lat(0), Lon(0)}};
+  auto legs = wr::PlanPassageLegs(
+      m, {{wr::MarkSide::LeaveToPort, 0}, {wr::MarkSide::LeaveToPort, 0},
+          {wr::MarkSide::LeaveToPort, 0}},
+      {});
+  ASSERT_EQ(legs.size(), 4u);
+  for (size_t i = 0; i < legs.size(); ++i) {
+    const auto s = EastNorth(legs[i].start_lat, legs[i].start_lon);
+    const auto e = EastNorth(legs[i].end_lat, legs[i].end_lon);
+    // A short first step from the start in a few directions is allowed.
+    int free = 0;
+    for (double deg = 0; deg < 360; deg += 30) {
+      const double r = deg * 0.017453292519943295;
+      free += !Breaks(legs[i], {s, {s.first + 0.05 * std::sin(r),
+                                    s.second + 0.05 * std::cos(r)}});
+    }
+    EXPECT_GE(free, 6) << "leg " << i + 1 << " can hardly leave its start";
+    // And it can arrive from somewhere nearby.
+    int arrive = 0;
+    for (double deg = 0; deg < 360; deg += 30) {
+      const double r = deg * 0.017453292519943295;
+      arrive += !Breaks(legs[i], {{e.first + 0.05 * std::sin(r),
+                                   e.second + 0.05 * std::cos(r)},
+                                  e});
+    }
+    EXPECT_GE(arrive, 6) << "leg " << i + 1 << " can hardly arrive";
+  }
+}
+
+TEST(PassageReview, PassThroughIgnoresClearanceSoTheLegCanFinish) {
+  // C3: "pass through" with a clearance used to make a leg end inside its
+  // own keep-out circle.
+  auto legs = wr::PlanPassageLegs(Course(), {{wr::MarkSide::Any, 0.1}}, {});
+  ASSERT_EQ(legs.size(), 2u);
+  EXPECT_TRUE(legs[0].end_is_mark);
+  EXPECT_TRUE(legs[0].rules.empty());
+  EXPECT_TRUE(legs[1].rules.empty());
+}
+
+TEST(PassageReview, KeepClearMarkOnALegEndIsDroppedForThatLeg) {
+  // An avoid mark on the finish would make the last leg impossible.
+  auto legs = wr::PlanPassageLegs({Course()[0], Course()[2]}, {},
+                                  {{Course()[2].lat, Course()[2].lon, 0.3}});
+  ASSERT_EQ(legs.size(), 1u);
+  EXPECT_TRUE(legs[0].rules.empty());
+}
+
+TEST(PassageReview, BarrierIsSizedToTheCourse) {
+  auto legs = WindwardLeeward(0.0, wr::MarkSide::LeaveToPort);
+  ASSERT_FALSE(legs[0].rules.empty());
+  EXPECT_NEAR(legs[0].rules[0].barrier_length_nm, 4.0, 1e-6);  // 2 x 2 nm
+}

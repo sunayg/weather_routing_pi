@@ -87,6 +87,13 @@ PassageDialog::PassageDialog(
     grid->Add(c);
     m_side.push_back(side);
     m_clearance.push_back(clr);
+    // A clearance only makes sense with a side: passing through a mark
+    // means sailing to it.
+    clr->Enable(false);
+    side->Bind(wxEVT_CHOICE, [side, clr](wxCommandEvent& e) {
+      clr->Enable(side->GetSelection() > 0);
+      e.Skip();
+    });
   }
   if (n < 3)
     marks->Add(new wxStaticText(
@@ -220,7 +227,9 @@ PassageRequest PassageDialog::GetRequest() const {
       case 2: v.side = weather_routing::MarkSide::LeaveToStarboard; break;
       default: v.side = weather_routing::MarkSide::Any; break;
     }
-    v.clearance_nm = m_clearance[i]->GetValue();
+    v.clearance_nm = v.side == weather_routing::MarkSide::Any
+                         ? 0.0
+                         : m_clearance[i]->GetValue();
     r.via.push_back(v);
   }
   r.avoid = m_avoid;
