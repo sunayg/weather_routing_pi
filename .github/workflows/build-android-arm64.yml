@@ -21,6 +21,10 @@ jobs:
     env:
       WEATHER_ROUTING_API_HEADER_VERSION: "1.21"
       CMAKE_BUILD_PARALLEL_LEVEL: "4"
+      # The runner presets these to its own preinstalled Android SDK, which the
+      # disk-cleanup step removes. Let the build script download what it needs.
+      ANDROID_SDK_ROOT: ${{ github.workspace }}/.android-ci/android-sdk
+      NDK_HOME: ""
     steps:
       - name: Free disk space
         run: |
